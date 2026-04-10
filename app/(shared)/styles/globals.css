@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Dark mode overrides ────────────────────────────────────────────────────
+   Since components use hardcoded Tailwind color classes, we override them
+   globally under the .dark class rather than touching every component.
+   Palette: slate-900/800/700 backgrounds, slate-300/400 text.
+──────────────────────────────────────────────────────────────────────────── */
+
+/* Page & layout backgrounds */
+.dark body                    { background-color: #0f172a; color: #f1f5f9; }
+.dark .bg-gray-50             { background-color: #0f172a; }
+.dark .bg-white               { background-color: #1e293b; }
+.dark .bg-gray-100            { background-color: #334155; }
+.dark .bg-gray-200            { background-color: #475569; }
+
+/* Text */
+.dark .text-gray-900          { color: #f1f5f9; }
+.dark .text-gray-800          { color: #e2e8f0; }
+.dark .text-gray-700          { color: #cbd5e1; }
+.dark .text-gray-600          { color: #94a3b8; }
+.dark .text-gray-500          { color: #64748b; }
+.dark .text-gray-400          { color: #475569; }
+
+/* Borders */
+.dark .border-gray-100        { border-color: #1e293b; }
+.dark .border-gray-200        { border-color: #334155; }
+.dark .border-gray-300        { border-color: #475569; }
+
+/* Divide (used in tables / lists) */
+.dark .divide-gray-100 > * + * { border-color: #1e293b; }
+.dark .divide-gray-200 > * + * { border-color: #334155; }
+
+/* Inputs & textareas */
+.dark input:not([type=checkbox]):not([type=radio]),
+.dark textarea,
+.dark select {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #475569; }
+
+/* Cards / panels (explicit white backgrounds used as cards) */
+.dark .bg-green-50            { background-color: #052e16; }
+.dark .bg-red-50              { background-color: #2d0a0a; }
+.dark .bg-amber-50            { background-color: #2d1f00; }
+.dark .bg-blue-50             { background-color: #0a1628; }
+
+/* Text on tinted backgrounds */
+.dark .text-green-800         { color: #86efac; }
+.dark .text-red-700           { color: #fca5a5; }
+.dark .text-amber-800         { color: #fcd34d; }
+.dark .text-amber-700         { color: #fbbf24; }
+
+/* Borders on tinted backgrounds */
+.dark .border-green-200       { border-color: #166534; }
+.dark .border-red-200         { border-color: #7f1d1d; }
+.dark .border-amber-200       { border-color: #78350f; }
+
+/* Hover states */
+.dark .hover\:bg-gray-50:hover  { background-color: #1e293b; }
+.dark .hover\:bg-gray-100:hover { background-color: #334155; }
+
+/* Sticky header in app shell */
+.dark header.bg-white         { background-color: #1e293b; }
+
+/* Sidebar */
+.dark aside.bg-white          { background-color: #1e293b; }
+
+/* Tag pills (bg-gray-100 text-gray-700) */
+.dark .bg-gray-100.text-gray-700 { background-color: #334155; color: #cbd5e1; }
+
+/* Scrollbar (webkit) */
+.dark ::-webkit-scrollbar-track  { background: #0f172a; }
+.dark ::-webkit-scrollbar-thumb  { background: #334155; border-radius: 4px; }
