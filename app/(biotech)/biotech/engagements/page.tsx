@@ -82,12 +82,93 @@ function matchesTab(stage: string, tab: FilterTab): boolean {
   }
 }
 
+// ── Pipeline legend ───────────────────────────────────────────────────────────
+
+const PIPELINE_STAGES: { key: string; label: string; short: string; color: string; dot: string }[] = [
+  { key: 'enquiry_draft',     label: 'Draft',            short: 'Draft',     color: 'border-gray-700 bg-gray-800/60 text-gray-400',       dot: 'bg-gray-600'   },
+  { key: 'enquiry_sent',      label: 'Enquiry sent',     short: 'Enquiry',   color: 'border-blue-800/60 bg-blue-900/20 text-blue-300',     dot: 'bg-blue-500'   },
+  { key: 'response_received', label: 'Response in',      short: 'Response',  color: 'border-amber-800/40 bg-amber-900/20 text-amber-300',  dot: 'bg-amber-500'  },
+  { key: 'followup_sent',     label: 'Follow-up sent',   short: 'Follow-up', color: 'border-blue-800/60 bg-blue-900/20 text-blue-300',     dot: 'bg-blue-400'   },
+  { key: 'meeting_scheduled', label: 'Meeting',          short: 'Meeting',   color: 'border-purple-800/40 bg-purple-900/20 text-purple-300', dot: 'bg-purple-500' },
+  { key: 'rfp_sent',          label: 'RFP sent',         short: 'RFP',       color: 'border-blue-800/60 bg-blue-900/20 text-blue-300',     dot: 'bg-blue-300'   },
+  { key: 'awarded',           label: 'Awarded',          short: 'Awarded',   color: 'border-green-800/40 bg-green-900/20 text-green-300',  dot: 'bg-green-500'  },
+];
+
+// Merge followup_draft+followup_sent counts into 'followup_sent' bucket
+// and rfp_draft+rfp_sent into 'rfp_sent' bucket for display simplicity
+function stageCountFor(stage: string, engagements: Engagement[]): number {
+  if (stage === 'followup_sent') {
+    return engagements.filter(e => e.stage === 'followup_draft' || e.stage === 'followup_sent').length;
+  }
+  if (stage === 'rfp_sent') {
+    return engagements.filter(e => e.stage === 'rfp_draft' || e.stage === 'rfp_sent').length;
+  }
+  if (stage === 'meeting_scheduled') {
+    return engagements.filter(e => e.stage === 'meeting_scheduled' || e.stage === 'meeting_done').length;
+  }
+  return engagements.filter(e => e.stage === stage).length;
+}
+
+function PipelineLegend({ engagements }: { engagements: Engagement[] }) {
+  const total = engagements.filter(e => !['awarded', 'closed'].includes(e.stage)).length;
+
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900/40 px-4 py-3.5">
+      {/* Title row */}
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-3">
+        Engagement pipeline
+        <span className="ml-2 font-normal normal-case text-gray-700">
+          {total} active CRO{total !== 1 ? 's' : ''} in flight
+        </span>
+      </p>
+
+      {/* Stage nodes + connectors */}
+      <div className="flex items-center overflow-x-auto gap-0 pb-1">
+        {PIPELINE_STAGES.map((stage, i) => {
+          const count = stageCountFor(stage.key, engagements);
+          const isLast = i === PIPELINE_STAGES.length - 1;
+
+          return (
+            <div key={stage.key} className="flex items-center shrink-0">
+              {/* Stage node */}
+              <div className={`flex flex-col items-center gap-1.5 rounded-lg border px-3 py-2 min-w-[72px] transition-opacity ${
+                count > 0 ? 'opacity-100' : 'opacity-30'
+              } ${stage.color}`}>
+                {/* Count bubble */}
+                <div className="flex items-center gap-1.5">
+                  <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${stage.dot}`} />
+                  <span className={`text-lg font-bold leading-none ${count > 0 ? '' : 'text-gray-600'}`}>
+                    {count}
+                  </span>
+                </div>
+                {/* Label */}
+                <span className="text-[10px] font-medium text-center leading-tight whitespace-nowrap">
+                  {stage.short}
+                </span>
+              </div>
+
+              {/* Connector arrow */}
+              {!isLast && (
+                <div className="flex items-center mx-1 text-gray-700">
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function EngagementsPage() {
   const router = useRouter();
   const [engagements, setEngagements] = useState<Engagement[]>([]);
   const [loading, setLoading]         = useState(true);
   const [tab, setTab]                 = useState<FilterTab>('active');
-  const [groupByBrief, setGroupByBrief] = useState(false);
+  const [groupByBrief, setGroupByBrief] = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -212,6 +293,9 @@ export default function EngagementsPage() {
             {groupByBrief ? '≡ Flat view' : '⊞ Group by brief'}
           </button>
         </header>
+
+        {/* Pipeline stage visualiser */}
+        <PipelineLegend engagements={engagements} />
 
         {/* Filter tabs */}
         <div className="flex gap-1 overflow-x-auto border-b border-gray-800 pb-px">

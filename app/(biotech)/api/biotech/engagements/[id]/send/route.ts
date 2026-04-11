@@ -102,22 +102,38 @@ export async function POST(
 
     const resendMessageId = (sendData as { id?: string } | null)?.id ?? null;
 
+    // Fetch message type to determine stage transition
+    const { data: sentMsg } = await supabase
+      .from('engagement_messages')
+      .select('message_type')
+      .eq('id', message_id)
+      .single();
+    const messageType = sentMsg?.message_type ?? '';
+
     await supabase
       .from('engagement_messages')
       .update({ status: 'sent', sent_at: new Date().toISOString(), resend_message_id: resendMessageId })
       .eq('id', message_id);
 
-    // Advance stage: followup_draft → followup_sent
-    if (engagement.stage === 'followup_draft') {
+    // Stage transitions
+    if (messageType === 'followup' && engagement.stage === 'followup_draft') {
       await supabase
         .from('cro_engagements')
         .update({ stage: 'followup_sent', updated_at: new Date().toISOString() })
         .eq('id', engagementId);
+    } else if (messageType === 'meeting_invite') {
+      await supabase
+        .from('cro_engagements')
+        .update({ stage: 'meeting_scheduled', updated_at: new Date().toISOString() })
+        .eq('id', engagementId);
     }
+
+    // Derive email_logs template name from message type
+    const templateName = messageType === 'meeting_invite' ? 'biotech_meeting_invite' : 'biotech_followup';
 
     await adminSupabase.from('email_logs').insert({
       user_id:         user.id,
-      template_name:   'biotech_followup',
+      template_name:   templateName,
       recipient_email: engagement.cro_email,
       subject,
       status:          'sent',
@@ -135,7 +151,7 @@ export async function POST(
 
     await adminSupabase.from('email_logs').insert({
       user_id:         user.id,
-      template_name:   'biotech_followup',
+      template_name:   'biotech_outbound',
       recipient_email: engagement.cro_email,
       subject,
       status:          'failed',

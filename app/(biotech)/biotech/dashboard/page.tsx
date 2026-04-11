@@ -296,7 +296,7 @@ export default function BiotechDashboard() {
                       <tr
                         key={eng.id}
                         className={`transition-colors hover:bg-gray-800/40 cursor-pointer ${i < engagements.length - 1 ? 'border-b border-gray-800' : ''}`}
-                        onClick={() => router.push(`/biotech/briefs/${eng.brief_id}`)}
+                        onClick={() => router.push(`/biotech/engagements/${eng.id}`)}
                       >
                         <td className="px-4 py-3 font-medium text-gray-200">{eng.cro_name}</td>
                         <td className="px-4 py-3 text-gray-500 hidden sm:table-cell max-w-[200px] truncate">{briefTitle}</td>
