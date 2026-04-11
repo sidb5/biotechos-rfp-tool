@@ -6,13 +6,21 @@ import Link from 'next/link';
 import { supabase } from '@shared/lib/supabase';
 import VerifyBusiness from '@shared/components/VerifyBusiness';
 
-type Step = 'signup' | 'verify'
+type Step = 'persona' | 'signup' | 'verify';
+type UserType = 'cro' | 'biotech';
+
+// Where each user type lands after completing signup
+const DASHBOARD: Record<UserType, string> = {
+  cro: '/dashboard',
+  biotech: '/biotech/dashboard',
+};
 
 function SignupPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [step, setStep] = useState<Step>('signup');
+  const [step, setStep] = useState<Step>('persona');
+  const [userType, setUserType] = useState<UserType | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,25 +29,31 @@ function SignupPageInner() {
   const [refCode, setRefCode] = useState('');
   const [croCount, setCroCount] = useState<number | null>(null);
 
-  // Pick up ?ref=CODE from URL and store in sessionStorage
+  // Pick up ?ref=CODE
   useEffect(() => {
-    const ref = searchParams.get('ref') ?? sessionStorage.getItem('referral_code') ?? ''
+    const ref = searchParams.get('ref') ?? sessionStorage.getItem('referral_code') ?? '';
     if (ref) {
-      sessionStorage.setItem('referral_code', ref)
-      setRefCode(ref)
+      sessionStorage.setItem('referral_code', ref);
+      setRefCode(ref);
     }
-  }, [searchParams])
+  }, [searchParams]);
 
-  // Fetch social proof count
+  // Social proof count (CRO-side)
   useEffect(() => {
     fetch('/api/stats/cro-count')
       .then(r => r.json())
       .then(d => setCroCount(d.count))
-      .catch(() => {/* silent */})
-  }, [])
+      .catch(() => { /* silent */ });
+  }, []);
+
+  function selectPersona(type: UserType) {
+    setUserType(type);
+    setStep('signup');
+  }
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
+    if (!userType) return;
     setError('');
     setLoading(true);
 
@@ -53,8 +67,10 @@ function SignupPageInner() {
       email,
       password,
       options: {
-        // Points at our custom confirm route so we can send a branded welcome email
         emailRedirectTo: `${window.location.origin}/api/auth/confirm`,
+        // user_type is stored in auth metadata — readable server-side from
+        // user.user_metadata.user_type without a DB call
+        data: { user_type: userType },
       },
     });
 
@@ -65,8 +81,13 @@ function SignupPageInner() {
     }
 
     if (data.session) {
-      // Signed in immediately — proceed to verify step
-      setStep('verify');
+      // Signed in immediately — CRO users go to verify step; biotech skip verify
+      if (userType === 'cro') {
+        setStep('verify');
+      } else {
+        router.push(DASHBOARD.biotech);
+        router.refresh();
+      }
       setLoading(false);
     } else {
       // Email confirmation required
@@ -76,32 +97,28 @@ function SignupPageInner() {
   }
 
   async function handleVerified() {
-    // Apply referral code if present
-    const code = sessionStorage.getItem('referral_code')
+    const code = sessionStorage.getItem('referral_code');
     if (code) {
       try {
         await fetch('/api/referral/apply', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ referral_code: code }),
-        })
-      } catch {
-        /* non-fatal — proceed regardless */
-      }
-      sessionStorage.removeItem('referral_code')
+        });
+      } catch { /* non-fatal */ }
+      sessionStorage.removeItem('referral_code');
     }
-
-    router.push('/dashboard');
+    router.push(DASHBOARD[userType ?? 'cro']);
     router.refresh();
   }
 
   function handleSkipVerify() {
-    // Still apply referral if present (non-verified referees won't earn reward,
-    // but we still record the attribution)
-    sessionStorage.removeItem('referral_code')
-    router.push('/dashboard');
+    sessionStorage.removeItem('referral_code');
+    router.push(DASHBOARD[userType ?? 'cro']);
     router.refresh();
   }
+
+  // ── Email confirmation sent ─────────────────────────────────────────────
 
   if (success) {
     return (
@@ -122,17 +139,107 @@ function SignupPageInner() {
     );
   }
 
+  // ── Business verification (CRO only) ───────────────────────────────────
+
   if (step === 'verify') {
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <VerifyBusiness onVerified={handleVerified} onSkip={handleSkipVerify} />
       </main>
-    )
+    );
   }
+
+  // ── Step 1: Who are you? ────────────────────────────────────────────────
+
+  if (step === 'persona') {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="w-full max-w-lg">
+          <div className="text-center mb-10">
+            <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-2">
+              BiotechOS
+            </p>
+            <h1 className="text-3xl font-bold text-gray-900">Who are you?</h1>
+            <p className="text-gray-500 mt-2 text-sm">
+              We'll show you the right tools for your role.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* CRO card */}
+            <button
+              type="button"
+              onClick={() => selectPersona('cro')}
+              className="group text-left border-2 border-gray-200 hover:border-green-500 bg-white rounded-2xl p-6 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <div className="w-10 h-10 bg-green-100 group-hover:bg-green-200 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                <svg className="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+              </div>
+              <h2 className="text-base font-semibold text-gray-900 mb-1">
+                I'm a CRO
+              </h2>
+              <p className="text-sm text-gray-500 leading-snug">
+                I run preclinical studies and want to respond to incoming RFPs faster.
+              </p>
+              <p className="mt-3 text-xs font-medium text-green-600 group-hover:text-green-700">
+                Proposal Engine →
+              </p>
+            </button>
+
+            {/* Biotech card */}
+            <button
+              type="button"
+              onClick={() => selectPersona('biotech')}
+              className="group text-left border-2 border-gray-200 hover:border-blue-500 bg-white rounded-2xl p-6 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                <svg className="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              </div>
+              <h2 className="text-base font-semibold text-gray-900 mb-1">
+                I'm a Biotech / Pharma
+              </h2>
+              <p className="text-sm text-gray-500 leading-snug">
+                I need to find, brief, and engage CROs for preclinical studies — with IP protection built in.
+              </p>
+              <p className="mt-3 text-xs font-medium text-blue-600 group-hover:text-blue-700">
+                CRO Engagement Pipeline →
+              </p>
+            </button>
+          </div>
+
+          <p className="mt-8 text-sm text-center text-gray-500">
+            Already have an account?{' '}
+            <Link href="/login" className="text-gray-700 font-medium hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Step 2: Create account ──────────────────────────────────────────────
+
+  const isCro = userType === 'cro';
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-sm">
+
+        {/* Back to persona picker */}
+        <button
+          type="button"
+          onClick={() => { setStep('persona'); setError(''); }}
+          className="mb-6 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 transition-colors"
+        >
+          ← Change role
+        </button>
 
         {/* Referral banner */}
         {refCode && (
@@ -146,19 +253,23 @@ function SignupPageInner() {
           </div>
         )}
 
+        {/* Header — adapts to user type */}
         <div className="mb-8">
-          <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-1">
-            Proposal Engine
-          </p>
-          <h1 className="text-2xl font-bold text-gray-900">Reply to any client request in hours, not days.</h1>
-          <p className="text-sm text-gray-500 mt-2">Turn emails, PDFs, and RFPs into professional proposals without pulling your scientists into sales.</p>
-          <div className="flex flex-wrap gap-3 mt-3">
-            <span className="text-xs text-gray-600 flex items-center gap-1"><span className="text-green-500 font-bold">✓</span> Paste any request</span>
-            <span className="text-xs text-gray-600 flex items-center gap-1"><span className="text-green-500 font-bold">✓</span> Quote in under an hour</span>
-            <span className="text-xs text-gray-600 flex items-center gap-1"><span className="text-green-500 font-bold">✓</span> Win more, respond faster</span>
+          <div className={`inline-flex items-center gap-1.5 text-xs font-semibold tracking-widest uppercase mb-2 ${isCro ? 'text-green-600' : 'text-blue-600'}`}>
+            <span className={`w-2 h-2 rounded-full ${isCro ? 'bg-green-500' : 'bg-blue-500'}`} />
+            {isCro ? 'CRO — Proposal Engine' : 'Biotech / Pharma — CRO Pipeline'}
           </div>
-          {/* Social proof */}
-          {croCount !== null && croCount > 0 && (
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isCro
+              ? 'Reply to any client request in hours, not days.'
+              : 'Find and brief CROs without exposing your IP.'}
+          </h1>
+          <p className="text-sm text-gray-500 mt-2">
+            {isCro
+              ? 'Turn emails, PDFs, and RFPs into professional proposals without pulling your scientists into sales.'
+              : 'Go from internal study brief to CRO shortlist in one session. Every outbound message requires your approval.'}
+          </p>
+          {isCro && croCount !== null && croCount > 0 && (
             <p className="mt-3 text-xs text-gray-400 flex items-center gap-1">
               <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z" />
@@ -171,15 +282,17 @@ function SignupPageInner() {
         <form onSubmit={handleSignup} className="flex flex-col gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+              Work email
             </label>
             <input
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              placeholder="you@yourcro.com"
+              onChange={e => setEmail(e.target.value)}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
+                isCro ? 'focus:ring-green-500' : 'focus:ring-blue-500'
+              }`}
+              placeholder={isCro ? 'you@yourcro.com' : 'you@yourbiotech.com'}
             />
           </div>
 
@@ -191,22 +304,26 @@ function SignupPageInner() {
               type="password"
               required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              onChange={e => setPassword(e.target.value)}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
+                isCro ? 'focus:ring-green-500' : 'focus:ring-blue-500'
+              }`}
               placeholder="Min. 8 characters"
             />
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-              {error}
-            </p>
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`w-full py-2.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              isCro
+                ? 'bg-green-600 hover:bg-green-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {loading ? 'Creating account…' : 'Create account'}
           </button>
@@ -214,7 +331,7 @@ function SignupPageInner() {
 
         <p className="mt-6 text-sm text-center text-gray-500">
           Already have an account?{' '}
-          <Link href="/login" className="text-green-600 font-medium hover:underline">
+          <Link href="/login" className={`font-medium hover:underline ${isCro ? 'text-green-600' : 'text-blue-600'}`}>
             Sign in
           </Link>
         </p>
@@ -232,5 +349,5 @@ export default function SignupPage() {
     }>
       <SignupPageInner />
     </Suspense>
-  )
+  );
 }

@@ -31,7 +31,18 @@ export async function GET(request: Request) {
           userId: user.id,
         }).catch(console.error);
       }
-      return NextResponse.redirect(`${origin}${next}`);
+
+      // Route to the correct dashboard based on user type set at signup.
+      // The `next` param from the URL takes precedence if explicitly set.
+      // Otherwise fall back to the type-appropriate default.
+      const hasExplicitNext = searchParams.has('next');
+      let destination = next;
+      if (!hasExplicitNext) {
+        const userType = user.user_metadata?.user_type ?? 'cro';
+        destination = userType === 'biotech' ? '/biotech/dashboard' : '/dashboard';
+      }
+
+      return NextResponse.redirect(`${origin}${destination}`);
     }
   }
 

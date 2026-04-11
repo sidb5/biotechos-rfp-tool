@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import FeatureGate from './FeatureGate';
+import FeatureGate from '@shared/components/FeatureGate';
 import type { Plan } from '@shared/lib/feature-flags';
 import { canAccess } from '@shared/lib/feature-flags';
 

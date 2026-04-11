@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Lenovo/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/fe9aa0f2-5395-4fa4-9ef0-27b11dbbfbc7/bae71dc4-e705-47d2-a16d-ed2a02860b39/skills/docx/**)",
+      "Bash(python scripts/office/unpack.py \"E:\\\\PROJECTS\\\\BiotechOS\\\\reorg_instructions.docx\" \"E:\\\\PROJECTS\\\\BiotechOS\\\\reorg_unpacked/\")",
+      "Bash(python -c \":*)",
+      "Bash(supabase --version)",
+      "Bash(npm install:*)",
+      "Bash(npx supabase:*)",
+      "Bash(supabase link:*)",
+      "Bash(cd \"E:/PROJECTS/BiotechOS/app\" echo \"=== ROOT ===\")",
+      "Read(//e/PROJECTS/BiotechOS/app/=== app/**)",
+      "Read(//e/PROJECTS/BiotechOS/app/=== app/\\(cro\\)/**)",
+      "Read(//e/PROJECTS/BiotechOS/app/=== app/\\(shared\\)/**)",
+      "Read(//e/PROJECTS/BiotechOS/app/=== app/\\(biotech\\)/**)",
+      "Read(//e/PROJECTS/BiotechOS/app/=== supabase/migrations/**)",
+      "Bash(cd \"E:/PROJECTS/BiotechOS/app\" git init echo \"Git initialized at new root\" git status --short)",
+      "Bash(cd \"E:/PROJECTS/BiotechOS/app\" git add app/ middleware.ts next.config.js tsconfig.json tailwind.config.ts postcss.config.js instrumentation.ts vercel.json package.json package-lock.json CLAUDE.md TASKS_PHASE4.md NOTES.md supabase/ public/ scripts/ sentry.client.config.ts sentry.edge.config.ts sentry.server.config.ts .gitignore git status --short)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm run:*)",
+      "Bash(gh repo:*)"
+    ]
+  }
+}

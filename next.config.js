@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Prevent Next.js bundling these Node.js packages — load them from node_modules at runtime.
-  serverExternalPackages: ['pdf-parse', 'mammoth', 'puppeteer-core', '@sparticuz/chromium'],
+  experimental: {
+    serverComponentsExternalPackages: ['pdf-parse', 'mammoth', 'puppeteer-core', '@sparticuz/chromium', 'adm-zip'],
+  },
 };
 
 // Only wrap with Sentry if we have auth credentials — avoids build failures on first deploy

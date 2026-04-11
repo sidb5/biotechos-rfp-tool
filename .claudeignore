@@ -1,0 +1,17 @@
+# CRO sell-side — do not touch
+/app/(cro)
+
+# Completed task archives — reference only if explicitly asked
+DONE_*.md
+*_POSTPONE.md
+
+# Generated outputs and assets — never needed in context
+public/
+*.png
+*.jpg
+*.svg
+*.pdf
+
+# Dependencies — never read these
+node_modules/
+.next/

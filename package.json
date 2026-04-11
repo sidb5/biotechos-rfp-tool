@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
+    "adm-zip": "^0.5.16",
     "@sentry/nextjs": "^10.47.0",
     "@sparticuz/chromium": "^133.0.0",
     "@stripe/stripe-js": "^9.1.0",
@@ -28,6 +29,7 @@
     "stripe": "^22.0.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
