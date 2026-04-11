@@ -237,7 +237,14 @@ export default function EngagementsPage() {
           {items.map((eng, i) => (
             <tr
               key={eng.id}
-              onClick={() => router.push(`/biotech/engagements/${eng.id}`)}
+              onClick={() => {
+                // meeting_done → go straight to RFP builder for this brief
+                if (['meeting_done', 'rfp_draft'].includes(eng.stage)) {
+                  router.push(`/biotech/briefs/${eng.brief_id}/rfp`);
+                } else {
+                  router.push(`/biotech/engagements/${eng.id}`);
+                }
+              }}
               className={`cursor-pointer transition-colors hover:bg-gray-800/40 ${i < items.length - 1 ? 'border-b border-gray-800' : ''}`}
             >
               <td className="px-4 py-3">

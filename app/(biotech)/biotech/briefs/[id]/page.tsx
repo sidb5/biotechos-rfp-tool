@@ -262,12 +262,20 @@ export default function BriefPage() {
                 )}
               </div>
             </div>
-            <a
-              href={`/biotech/briefs/${briefId}/extract`}
-              className="text-xs text-gray-600 hover:text-gray-400 border border-gray-700 hover:border-gray-600 rounded-lg px-3 py-1.5 transition-colors shrink-0"
-            >
-              Edit brief
-            </a>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href={`/biotech/briefs/${briefId}/rfp`}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600/10 border border-blue-700/40 text-blue-300 hover:bg-blue-600/20 px-3 py-1.5 text-xs font-medium transition-colors"
+              >
+                📄 RFP
+              </a>
+              <a
+                href={`/biotech/briefs/${briefId}/extract`}
+                className="text-xs text-gray-600 hover:text-gray-400 border border-gray-700 hover:border-gray-600 rounded-lg px-3 py-1.5 transition-colors"
+              >
+                Edit brief
+              </a>
+            </div>
           </div>
         </header>
 
