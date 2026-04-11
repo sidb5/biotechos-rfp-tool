@@ -31,8 +31,6 @@ next-env.d.ts
 
 .vercel
 
-# Old CRO app (kept as reference/backup — not part of new structure)
+# Old flat-folder backups (kept as reference — not part of new structure)
 cro/
 cro_backup/
-biotech/
-shared/
