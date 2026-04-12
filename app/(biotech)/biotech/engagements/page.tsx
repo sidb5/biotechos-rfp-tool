@@ -29,17 +29,17 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_COLOR: Record<string, string> = {
-  enquiry_draft:     'bg-gray-700 text-gray-400',
-  enquiry_sent:      'bg-blue-900/60 text-blue-300',
-  response_received: 'bg-amber-900/50 text-amber-300',
-  followup_draft:    'bg-gray-700 text-gray-400',
-  followup_sent:     'bg-blue-900/60 text-blue-300',
-  meeting_scheduled: 'bg-purple-900/50 text-purple-300',
-  meeting_done:      'bg-purple-900/60 text-purple-300',
-  rfp_draft:         'bg-gray-700 text-gray-400',
-  rfp_sent:          'bg-blue-900/60 text-blue-300',
-  awarded:           'bg-green-900/50 text-green-300',
-  closed:            'bg-gray-800 text-gray-600',
+  enquiry_draft:     'bg-gray-100 text-gray-500',
+  enquiry_sent:      'bg-blue-50 text-blue-700',
+  response_received: 'bg-amber-50 text-amber-700',
+  followup_draft:    'bg-gray-100 text-gray-500',
+  followup_sent:     'bg-blue-50 text-blue-700',
+  meeting_scheduled: 'bg-purple-50 text-purple-700',
+  meeting_done:      'bg-purple-50 text-purple-700',
+  rfp_draft:         'bg-gray-100 text-gray-500',
+  rfp_sent:          'bg-blue-50 text-blue-700',
+  awarded:           'bg-green-50 text-green-700',
+  closed:            'bg-gray-100 text-gray-500',
 };
 
 const NEXT_ACTION: Record<string, string> = {
@@ -85,13 +85,13 @@ function matchesTab(stage: string, tab: FilterTab): boolean {
 // ── Pipeline legend ───────────────────────────────────────────────────────────
 
 const PIPELINE_STAGES: { key: string; label: string; short: string; color: string; dot: string }[] = [
-  { key: 'enquiry_draft',     label: 'Draft',            short: 'Draft',     color: 'border-gray-700 bg-gray-800/60 text-gray-400',       dot: 'bg-gray-600'   },
-  { key: 'enquiry_sent',      label: 'Enquiry sent',     short: 'Enquiry',   color: 'border-blue-800/60 bg-blue-900/20 text-blue-300',     dot: 'bg-blue-500'   },
-  { key: 'response_received', label: 'Response in',      short: 'Response',  color: 'border-amber-800/40 bg-amber-900/20 text-amber-300',  dot: 'bg-amber-500'  },
-  { key: 'followup_sent',     label: 'Follow-up sent',   short: 'Follow-up', color: 'border-blue-800/60 bg-blue-900/20 text-blue-300',     dot: 'bg-blue-400'   },
-  { key: 'meeting_scheduled', label: 'Meeting',          short: 'Meeting',   color: 'border-purple-800/40 bg-purple-900/20 text-purple-300', dot: 'bg-purple-500' },
-  { key: 'rfp_sent',          label: 'RFP sent',         short: 'RFP',       color: 'border-blue-800/60 bg-blue-900/20 text-blue-300',     dot: 'bg-blue-300'   },
-  { key: 'awarded',           label: 'Awarded',          short: 'Awarded',   color: 'border-green-800/40 bg-green-900/20 text-green-300',  dot: 'bg-green-500'  },
+  { key: 'enquiry_draft',     label: 'Draft',            short: 'Draft',     color: 'border-gray-200 bg-gray-100 text-gray-500',       dot: 'bg-gray-400'   },
+  { key: 'enquiry_sent',      label: 'Enquiry sent',     short: 'Enquiry',   color: 'border-blue-200 bg-blue-50 text-blue-700',         dot: 'bg-blue-500'   },
+  { key: 'response_received', label: 'Response in',      short: 'Response',  color: 'border-amber-200 bg-amber-50 text-amber-700',      dot: 'bg-amber-500'  },
+  { key: 'followup_sent',     label: 'Follow-up sent',   short: 'Follow-up', color: 'border-blue-200 bg-blue-50 text-blue-700',         dot: 'bg-blue-400'   },
+  { key: 'meeting_scheduled', label: 'Meeting',          short: 'Meeting',   color: 'border-purple-200 bg-purple-50 text-purple-700',   dot: 'bg-purple-500' },
+  { key: 'rfp_sent',          label: 'RFP sent',         short: 'RFP',       color: 'border-blue-200 bg-blue-50 text-blue-700',         dot: 'bg-blue-300'   },
+  { key: 'awarded',           label: 'Awarded',          short: 'Awarded',   color: 'border-green-200 bg-green-50 text-green-700',      dot: 'bg-green-500'  },
 ];
 
 // Merge followup_draft+followup_sent counts into 'followup_sent' bucket
@@ -113,11 +113,11 @@ function PipelineLegend({ engagements }: { engagements: Engagement[] }) {
   const total = engagements.filter(e => !['awarded', 'closed'].includes(e.stage)).length;
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/40 px-4 py-3.5">
+    <div className="rounded-xl border border-gray-100 bg-white px-4 py-3.5">
       {/* Title row */}
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 mb-3">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-3">
         Engagement pipeline
-        <span className="ml-2 font-normal normal-case text-gray-700">
+        <span className="ml-2 font-normal normal-case text-gray-400">
           {total} active CRO{total !== 1 ? 's' : ''} in flight
         </span>
       </p>
@@ -137,7 +137,7 @@ function PipelineLegend({ engagements }: { engagements: Engagement[] }) {
                 {/* Count bubble */}
                 <div className="flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${stage.dot}`} />
-                  <span className={`text-lg font-bold leading-none ${count > 0 ? '' : 'text-gray-600'}`}>
+                  <span className={`text-lg font-bold leading-none ${count > 0 ? '' : 'text-gray-400'}`}>
                     {count}
                   </span>
                 </div>
@@ -149,7 +149,7 @@ function PipelineLegend({ engagements }: { engagements: Engagement[] }) {
 
               {/* Connector arrow */}
               {!isLast && (
-                <div className="flex items-center mx-1 text-gray-700">
+                <div className="flex items-center mx-1 text-gray-400">
                   <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
@@ -189,7 +189,7 @@ export default function EngagementsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <svg className="h-6 w-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -223,7 +223,7 @@ export default function EngagementsPage() {
     return (
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-gray-800 text-left">
+          <tr className="border-b border-gray-100 text-left">
             <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">CRO</th>
             {!groupByBrief && (
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 hidden sm:table-cell">Brief</th>
@@ -244,11 +244,11 @@ export default function EngagementsPage() {
                 // via the "Generate RFP" action button inside the thread.
                 router.push(`/biotech/engagements/${eng.id}`);
               }}
-              className={`cursor-pointer transition-colors hover:bg-gray-800/40 ${i < items.length - 1 ? 'border-b border-gray-800' : ''}`}
+              className={`cursor-pointer transition-colors hover:bg-gray-50 ${i < items.length - 1 ? 'border-b border-gray-100' : ''}`}
             >
               <td className="px-4 py-3">
-                <p className="font-medium text-gray-200">{eng.cro_name}</p>
-                <p className="text-xs text-gray-600">{eng.cro_email}</p>
+                <p className="font-medium text-gray-800">{eng.cro_name}</p>
+                <p className="text-xs text-gray-500">{eng.cro_email}</p>
               </td>
               {!groupByBrief && (
                 <td className="px-4 py-3 text-gray-500 hidden sm:table-cell max-w-[180px] truncate text-xs">
@@ -256,14 +256,14 @@ export default function EngagementsPage() {
                 </td>
               )}
               <td className="px-4 py-3">
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${STAGE_COLOR[eng.stage] ?? 'bg-gray-700 text-gray-400'}`}>
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${STAGE_COLOR[eng.stage] ?? 'bg-gray-100 text-gray-500'}`}>
                   {STAGE_LABELS[eng.stage] ?? eng.stage}
                 </span>
               </td>
               <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">
                 {NEXT_ACTION[eng.stage] ?? '—'}
               </td>
-              <td className="px-4 py-3 text-xs text-gray-600 text-right">{timeAgo(eng.updated_at)}</td>
+              <td className="px-4 py-3 text-xs text-gray-400 text-right">{timeAgo(eng.updated_at)}</td>
             </tr>
           ))}
         </tbody>
@@ -272,19 +272,19 @@ export default function EngagementsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-5xl px-5 py-10 space-y-6">
 
         {/* Header */}
         <header className="flex items-start justify-between gap-4">
           <div>
-            <nav className="mb-1.5 text-xs text-gray-600">
-              <a href="/biotech/dashboard" className="hover:text-gray-400 transition-colors">Dashboard</a>
+            <nav className="mb-1.5 text-xs text-gray-500">
+              <a href="/biotech/dashboard" className="hover:text-gray-600 transition-colors">Dashboard</a>
               <span className="mx-1.5">/</span>
-              <span className="text-gray-400">Engagements</span>
+              <span className="text-gray-500">Engagements</span>
             </nav>
-            <h1 className="text-2xl font-semibold text-white">CRO engagements</h1>
-            <p className="mt-1 text-sm text-gray-400">
+            <h1 className="text-2xl font-semibold text-gray-900">CRO engagements</h1>
+            <p className="mt-1 text-sm text-gray-500">
               {engagements.length} total engagement{engagements.length !== 1 ? 's' : ''} across all briefs
             </p>
           </div>
@@ -292,8 +292,8 @@ export default function EngagementsPage() {
             onClick={() => setGroupByBrief(v => !v)}
             className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs transition-colors ${
               groupByBrief
-                ? 'border-blue-600/40 bg-blue-600/10 text-blue-300'
-                : 'border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300'
+                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
             {groupByBrief ? '≡ Flat view' : '⊞ Group by brief'}
@@ -304,20 +304,20 @@ export default function EngagementsPage() {
         <PipelineLegend engagements={engagements} />
 
         {/* Filter tabs */}
-        <div className="flex gap-1 overflow-x-auto border-b border-gray-800 pb-px">
+        <div className="flex gap-1 overflow-x-auto border-b border-gray-200 pb-px">
           {TABS.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`shrink-0 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 tab === t.key
-                  ? 'border-blue-500 text-white'
-                  : 'border-transparent text-gray-500 hover:text-gray-300'
+                  ? 'border-blue-500 text-blue-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-600'
               }`}
             >
               {t.label}
               {t.key !== 'all' && (
-                <span className="ml-1.5 text-xs text-gray-600">
+                <span className="ml-1.5 text-xs text-gray-400">
                   {engagements.filter(e => matchesTab(e.stage, t.key)).length}
                 </span>
               )}
@@ -327,7 +327,7 @@ export default function EngagementsPage() {
 
         {/* Content */}
         {filtered.length === 0 ? (
-          <div className="rounded-xl border border-gray-800 bg-gray-900/30 px-6 py-12 text-center text-sm text-gray-600">
+          <div className="rounded-xl border border-gray-100 bg-white px-6 py-12 text-center text-sm text-gray-500">
             {engagements.length === 0
               ? 'No engagements yet. Create a brief and send your first capability enquiry.'
               : 'No engagements match this filter.'}
@@ -339,20 +339,20 @@ export default function EngagementsPage() {
                 <div className="flex items-center gap-3 mb-2">
                   <a
                     href={`/biotech/briefs/${briefId}`}
-                    className="text-sm font-medium text-gray-300 hover:text-blue-400 transition-colors"
+                    className="text-sm font-medium text-gray-800 hover:text-blue-600 transition-colors"
                   >
                     {group.title}
                   </a>
-                  <span className="text-xs text-gray-600">{group.items.length} CRO{group.items.length !== 1 ? 's' : ''}</span>
+                  <span className="text-xs text-gray-500">{group.items.length} CRO{group.items.length !== 1 ? 's' : ''}</span>
                 </div>
-                <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 overflow-hidden">
+                <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
                   {renderTable(group.items)}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 overflow-hidden">
+          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
             {renderTable(filtered)}
           </div>
         )}

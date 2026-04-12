@@ -46,7 +46,6 @@ export default function BiotechSettingsPage() {
       setUserId(user.id);
       setAuthEmail(user.email ?? '');
 
-      // Try to load existing settings row
       try {
         const { data } = await supabase
           .from('biotech_user_settings')
@@ -63,7 +62,6 @@ export default function BiotechSettingsPage() {
             response_deadline_days: data.response_deadline_days ?? 10,
           });
         } else {
-          // Pre-fill with auth values for first-time setup
           const metaName =
             user.user_metadata?.full_name ||
             user.user_metadata?.name      ||
@@ -75,11 +73,7 @@ export default function BiotechSettingsPage() {
           }));
         }
       } catch {
-        // biotech_user_settings table not yet migrated — pre-fill from auth
-        setForm(prev => ({
-          ...prev,
-          sender_email: user.email ?? '',
-        }));
+        setForm(prev => ({ ...prev, sender_email: user.email ?? '' }));
       }
 
       setLoading(false);
@@ -89,14 +83,10 @@ export default function BiotechSettingsPage() {
 
   function validate(): boolean {
     const errs: Partial<Record<keyof Settings, string>> = {};
-
-    if (form.sender_email && !isValidEmail(form.sender_email)) {
+    if (form.sender_email && !isValidEmail(form.sender_email))
       errs.sender_email = 'Enter a valid email address';
-    }
-    if (form.scheduling_link && !isValidUrl(form.scheduling_link)) {
+    if (form.scheduling_link && !isValidUrl(form.scheduling_link))
       errs.scheduling_link = 'Enter a valid URL (include https://)';
-    }
-
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -104,7 +94,6 @@ export default function BiotechSettingsPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
-
     setStatus('saving');
 
     const payload = {
@@ -146,7 +135,7 @@ export default function BiotechSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <svg className="h-6 w-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -156,18 +145,18 @@ export default function BiotechSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-2xl px-5 py-10 space-y-8">
 
         {/* Header */}
         <header>
-          <nav className="mb-1.5 text-xs text-gray-600">
-            <a href="/biotech/dashboard" className="hover:text-gray-400 transition-colors">Dashboard</a>
+          <nav className="mb-1.5 text-xs text-gray-500">
+            <a href="/biotech/dashboard" className="hover:text-gray-700 transition-colors">Dashboard</a>
             <span className="mx-1.5">/</span>
-            <span className="text-gray-400">Settings</span>
+            <span className="text-gray-700">Settings</span>
           </nav>
-          <h1 className="text-2xl font-semibold text-white">Outreach settings</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-semibold text-gray-900">Outreach settings</h1>
+          <p className="mt-1 text-sm text-gray-500">
             Controls how your emails appear to CROs and where their replies go.
           </p>
         </header>
@@ -175,14 +164,13 @@ export default function BiotechSettingsPage() {
         <form onSubmit={handleSave} className="space-y-6">
 
           {/* ── Identity ── */}
-          <section className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-6 space-y-5">
-            <h2 className="text-sm font-semibold text-gray-300">Your identity</h2>
+          <section className="rounded-xl border border-gray-200 bg-white p-6 space-y-5">
+            <h2 className="text-sm font-semibold text-gray-700">Your identity</h2>
 
-            {/* Sender display name */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-300">
+              <label className="block text-sm font-medium text-gray-700">
                 Your name
-                <span className="ml-2 text-xs font-normal text-gray-600">
+                <span className="ml-2 text-xs font-normal text-gray-500">
                   Shown in email From field — e.g. "Jane Smith via BiotechOS"
                 </span>
               </label>
@@ -190,15 +178,14 @@ export default function BiotechSettingsPage() {
                 type="text"
                 placeholder="Jane Smith"
                 {...field('sender_display_name')}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
-            {/* Sender email / Reply-To */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-300">
+              <label className="block text-sm font-medium text-gray-700">
                 Reply-To email address
-                <span className="ml-2 text-xs font-normal text-gray-600">
+                <span className="ml-2 text-xs font-normal text-gray-500">
                   CRO replies go directly to this inbox
                 </span>
               </label>
@@ -206,18 +193,18 @@ export default function BiotechSettingsPage() {
                 type="email"
                 placeholder={authEmail || 'you@yourbiotech.com'}
                 {...field('sender_email')}
-                className={`w-full rounded-lg border bg-gray-800 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 ${
+                className={`w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 ${
                   errors.sender_email
-                    ? 'border-red-600 focus:ring-red-500 focus:border-red-500'
-                    : 'border-gray-700 focus:ring-blue-500 focus:border-blue-500'
+                    ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
                 }`}
               />
               {errors.sender_email ? (
-                <p className="text-xs text-red-400">{errors.sender_email}</p>
+                <p className="text-xs text-red-600">{errors.sender_email}</p>
               ) : (
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-gray-500">
                   Currently using:{' '}
-                  <span className="text-gray-400 font-mono">
+                  <span className="text-gray-700 font-mono">
                     {form.sender_email || authEmail || '—'}
                   </span>
                   {!form.sender_email && authEmail && (
@@ -227,11 +214,10 @@ export default function BiotechSettingsPage() {
               )}
             </div>
 
-            {/* Company name */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-300">
+              <label className="block text-sm font-medium text-gray-700">
                 Company name
-                <span className="ml-2 text-xs font-normal text-gray-600">
+                <span className="ml-2 text-xs font-normal text-gray-500">
                   Used in RFP headers and email signatures
                 </span>
               </label>
@@ -239,20 +225,19 @@ export default function BiotechSettingsPage() {
                 type="text"
                 placeholder="Acme Therapeutics"
                 {...field('company_name')}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </section>
 
           {/* ── Outreach defaults ── */}
-          <section className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-6 space-y-5">
-            <h2 className="text-sm font-semibold text-gray-300">Outreach defaults</h2>
+          <section className="rounded-xl border border-gray-200 bg-white p-6 space-y-5">
+            <h2 className="text-sm font-semibold text-gray-700">Outreach defaults</h2>
 
-            {/* Default response deadline */}
             <div className="space-y-1.5">
-              <label htmlFor="deadline" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="deadline" className="block text-sm font-medium text-gray-700">
                 Default response deadline
-                <span className="ml-2 text-xs font-normal text-gray-600">
+                <span className="ml-2 text-xs font-normal text-gray-500">
                   Days you give CROs to respond to enquiries
                 </span>
               </label>
@@ -263,7 +248,7 @@ export default function BiotechSettingsPage() {
                   setForm(prev => ({ ...prev, response_deadline_days: Number(e.target.value) }));
                   if (status === 'saved') setStatus('idle');
                 }}
-                className="rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 {[5, 7, 10, 14, 20].map(d => (
                   <option key={d} value={d}>{d} days</option>
@@ -271,11 +256,10 @@ export default function BiotechSettingsPage() {
               </select>
             </div>
 
-            {/* Scheduling / booking link */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-300">
+              <label className="block text-sm font-medium text-gray-700">
                 Meeting booking link
-                <span className="ml-2 text-xs font-normal text-gray-600">
+                <span className="ml-2 text-xs font-normal text-gray-500">
                   Calendly, Cal.com, etc. — sent when inviting CROs to a call
                 </span>
               </label>
@@ -283,14 +267,14 @@ export default function BiotechSettingsPage() {
                 type="url"
                 placeholder="https://cal.com/yourname"
                 {...field('scheduling_link')}
-                className={`w-full rounded-lg border bg-gray-800 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 ${
+                className={`w-full rounded-lg border bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 ${
                   errors.scheduling_link
-                    ? 'border-red-600 focus:ring-red-500 focus:border-red-500'
-                    : 'border-gray-700 focus:ring-blue-500 focus:border-blue-500'
+                    ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                    : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
                 }`}
               />
               {errors.scheduling_link && (
-                <p className="text-xs text-red-400">{errors.scheduling_link}</p>
+                <p className="text-xs text-red-600">{errors.scheduling_link}</p>
               )}
             </div>
           </section>
@@ -299,16 +283,16 @@ export default function BiotechSettingsPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               {status === 'saved' && (
-                <p className="text-sm text-green-400">✓ Settings saved</p>
+                <p className="text-sm text-green-600">✓ Settings saved</p>
               )}
               {status === 'error' && (
-                <p className="text-sm text-red-400">Save failed — please try again</p>
+                <p className="text-sm text-red-600">Save failed — please try again</p>
               )}
             </div>
             <button
               type="submit"
               disabled={status === 'saving'}
-              className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {status === 'saving' ? 'Saving…' : 'Save settings'}
             </button>

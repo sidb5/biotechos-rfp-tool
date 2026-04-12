@@ -496,7 +496,6 @@ export default function EnquiryPage() {
 
   const activeCro   = cros.find(c => c.id === activeCroId) ?? null;
   const activeDraft = activeCroId ? (drafts[activeCroId] ?? null) : null;
-
   const sentCount  = Object.values(drafts).filter(d => d.status === 'sent').length;
   const readyCount = cros.filter(c => drafts[c.id]?.status === 'ready' && c.email).length;
   const allSent    = cros.length > 0 && sentCount === cros.length;
@@ -524,7 +523,7 @@ export default function EnquiryPage() {
 
   if (!dataLoaded) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <svg className="h-6 w-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -535,9 +534,9 @@ export default function EnquiryPage() {
 
   if (noSelection) {
     return (
-      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-3 text-gray-400">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3 text-gray-500">
         <p className="text-sm">No CROs selected.</p>
-        <a href={`/biotech/briefs/${briefId}`} className="text-sm text-blue-400 hover:underline">
+        <a href={`/biotech/briefs/${briefId}`} className="text-sm text-blue-600 hover:underline">
           ← Back to CRO selection
         </a>
       </div>
@@ -547,14 +546,14 @@ export default function EnquiryPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
 
       {/* PRIVATE banner */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-amber-800/30 bg-amber-950/70 px-5 py-2.5 backdrop-blur">
-        <span className="shrink-0 rounded border border-amber-700 bg-amber-900/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-300">
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2.5 backdrop-blur">
+        <span className="shrink-0 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
           PRIVATE
         </span>
-        <p className="text-xs text-amber-300/70">
+        <p className="text-xs text-amber-600">
           Review each draft before sending — compound, MOA, and indication are never included.
           Nothing is sent until you click &ldquo;Approve &amp; Send.&rdquo;
         </p>
@@ -564,26 +563,26 @@ export default function EnquiryPage() {
 
         {/* Header */}
         <header>
-          <nav className="mb-1.5 text-xs text-gray-600">
-            <a href="/biotech/briefs" className="hover:text-gray-400 transition-colors">Briefs</a>
+          <nav className="mb-1.5 text-xs text-gray-500">
+            <a href="/biotech/briefs" className="hover:text-gray-700 transition-colors">Briefs</a>
             <span className="mx-1.5">/</span>
-            <a href={`/biotech/briefs/${briefId}`} className="hover:text-gray-400 transition-colors">
+            <a href={`/biotech/briefs/${briefId}`} className="hover:text-gray-700 transition-colors">
               {brief?.title ?? 'Brief'}
             </a>
             <span className="mx-1.5">/</span>
-            <span className="text-gray-400">Capability enquiry</span>
+            <span className="text-gray-700">Capability enquiry</span>
           </nav>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold text-white">Capability enquiry drafts</h1>
-              <p className="mt-1 text-sm text-gray-400">
+              <h1 className="text-2xl font-semibold text-gray-900">Capability enquiry drafts</h1>
+              <p className="mt-1 text-sm text-gray-500">
                 AI-drafted IP-safe outreach for {cros.length} CRO{cros.length !== 1 ? 's' : ''}.
                 Drafts are saved automatically — edits persist across sessions.
               </p>
             </div>
             {(sentCount > 0 || bulkSentCount > 0) && (
-              <span className="text-sm text-gray-400 shrink-0">
-                <span className="text-green-400 font-semibold">
+              <span className="text-sm text-gray-500 shrink-0">
+                <span className="text-green-600 font-semibold">
                   {sendMode === 'bulk' ? bulkSentCount : sentCount}
                 </span>
                 {' '}/ {cros.length} sent
@@ -594,41 +593,41 @@ export default function EnquiryPage() {
 
         {/* Step label */}
         <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-gray-800" />
+          <div className="h-px flex-1 bg-gray-200" />
           <span className="text-xs font-medium text-gray-500 uppercase tracking-widest">
             Step 3 — Review &amp; send IP-safe capability enquiries
           </span>
-          <div className="h-px flex-1 bg-gray-800" />
+          <div className="h-px flex-1 bg-gray-200" />
         </div>
 
         {/* ── Send mode toggle ── */}
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500 shrink-0">Send mode:</span>
-          <div className="flex rounded-lg border border-gray-700 overflow-hidden">
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             <button
               onClick={() => setSendMode('bulk')}
               className={`px-4 py-1.5 text-xs font-medium transition-colors ${
                 sendMode === 'bulk'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-900 text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  : 'bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
               }`}
             >
               Bulk (same template)
             </button>
             <button
               onClick={handleSwitchToIndividual}
-              className={`px-4 py-1.5 text-xs font-medium transition-colors border-l border-gray-700 ${
+              className={`px-4 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
                 sendMode === 'individual'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-900 text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  : 'bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
               }`}
             >
               Individual (custom per CRO)
             </button>
           </div>
           {sendMode === 'bulk' && (
-            <p className="text-xs text-gray-600">
-              One template with <code className="text-amber-400">{'{{CRO_NAME}}'}</code> — substituted on send
+            <p className="text-xs text-gray-500">
+              One template with <code className="text-amber-600">{'{{CRO_NAME}}'}</code> — substituted on send
             </p>
           )}
         </div>
@@ -640,28 +639,28 @@ export default function EnquiryPage() {
           <aside className="space-y-4">
 
             {/* Draft options */}
-            <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-4 space-y-4">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Draft options</h2>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-500">Draft options</h2>
 
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-gray-300">Include budget range</span>
+                <span className="text-sm text-gray-700">Include budget range</span>
                 <button
                   role="switch"
                   aria-checked={includeBudget}
                   onClick={() => { setIncludeBudget(v => !v); setOptionsDirty(true); }}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${includeBudget ? 'bg-blue-600' : 'bg-gray-600'}`}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white ${includeBudget ? 'bg-blue-600' : 'bg-gray-300'}`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${includeBudget ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
               </div>
 
               <div className="flex items-center justify-between gap-3">
-                <label htmlFor="deadline-sel" className="text-sm text-gray-300">Response deadline</label>
+                <label htmlFor="deadline-sel" className="text-sm text-gray-700">Response deadline</label>
                 <select
                   id="deadline-sel"
                   value={deadlineDays}
                   onChange={e => { setDeadlineDays(Number(e.target.value)); setOptionsDirty(true); }}
-                  className="rounded-lg border border-gray-700 bg-gray-800 px-2.5 py-1.5 text-sm text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   {[5, 7, 10, 14, 20].map(d => <option key={d} value={d}>{d} days</option>)}
                 </select>
@@ -670,7 +669,7 @@ export default function EnquiryPage() {
               {optionsDirty && sendMode === 'individual' && (
                 <button
                   onClick={handleRegenerateAll}
-                  className="w-full rounded-lg border border-blue-600/40 bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-300 transition-colors hover:bg-blue-600/20"
+                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
                 >
                   ↺ Regenerate all with new options
                 </button>
@@ -678,7 +677,7 @@ export default function EnquiryPage() {
               {optionsDirty && sendMode === 'bulk' && bulkStatus === 'ready' && (
                 <button
                   onClick={handleGenerateBulkTemplate}
-                  className="w-full rounded-lg border border-blue-600/40 bg-blue-600/10 px-3 py-2 text-xs font-medium text-blue-300 transition-colors hover:bg-blue-600/20"
+                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
                 >
                   ↺ Regenerate template with new options
                 </button>
@@ -686,16 +685,16 @@ export default function EnquiryPage() {
             </div>
 
             {/* IP protection checklist */}
-            <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-4 space-y-4">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400">IP protection</h2>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-500">IP protection</h2>
 
               {includedFieldLabels.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-semibold text-green-400 mb-2">✓ INCLUDED from brief</p>
+                  <p className="text-[11px] font-semibold text-green-600 mb-2">✓ INCLUDED from brief</p>
                   <ul className="space-y-1.5">
                     {includedFieldLabels.map(label => (
-                      <li key={label} className="flex items-start gap-2 text-xs text-gray-400">
-                        <span className="mt-0.5 shrink-0 text-green-500">✓</span>{label}
+                      <li key={label} className="flex items-start gap-2 text-xs text-gray-500">
+                        <span className="mt-0.5 shrink-0 text-green-600">✓</span>{label}
                       </li>
                     ))}
                   </ul>
@@ -715,12 +714,12 @@ export default function EnquiryPage() {
             </div>
 
             {/* Reply-To info */}
-            <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-4 space-y-2">
-              <p className="text-xs font-semibold text-gray-400">Reply-To address</p>
-              <p className="text-xs text-gray-300 break-all font-mono">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+              <p className="text-xs font-semibold text-gray-500">Reply-To address</p>
+              <p className="text-xs text-gray-700 break-all font-mono">
                 {effectiveReplyTo || '—'}
               </p>
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-gray-500">
                 {usingAuthEmailFallback ? 'Using your login email. ' : ''}
                 CRO replies go directly to this inbox.{' '}
                 <a href="/biotech/settings" className="text-blue-500 hover:text-blue-400 transition-colors">
@@ -731,21 +730,21 @@ export default function EnquiryPage() {
 
             {/* Bulk: CRO send status list */}
             {sendMode === 'bulk' && bulkStatus !== 'idle' && cros.length > 0 && (
-              <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-4 space-y-2">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
+              <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
                   Send status
                 </p>
                 {cros.map(cro => {
                   const prog = bulkProgress[cro.id] ?? 'idle';
                   const icon =
-                    prog === 'sent'    ? <span className="text-green-400">✓</span> :
-                    prog === 'error'   ? <span className="text-red-400">✗</span> :
-                    prog === 'sending' ? <svg className="h-3 w-3 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> :
-                    <span className="text-gray-600">–</span>;
+                    prog === 'sent'    ? <span className="text-green-600">✓</span> :
+                    prog === 'error'   ? <span className="text-red-600">✗</span> :
+                    prog === 'sending' ? <svg className="h-3 w-3 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> :
+                    <span className="text-gray-500">–</span>;
                   return (
                     <div key={cro.id} className="flex items-center gap-2 text-xs">
                       <span className="shrink-0">{icon}</span>
-                      <span className={`truncate ${prog === 'sent' ? 'text-gray-300' : prog === 'error' ? 'text-red-400' : 'text-gray-500'}`}>
+                      <span className={`truncate ${prog === 'sent' ? 'text-gray-700' : prog === 'error' ? 'text-red-600' : 'text-gray-500'}`}>
                         {cro.name}
                       </span>
                       {!cro.email && <span className="text-[10px] text-red-700">no email</span>}
@@ -757,7 +756,7 @@ export default function EnquiryPage() {
           </aside>
 
           {/* ── Right panel ── */}
-          <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 overflow-hidden">
+          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
 
             {/* ──────────────── BULK MODE ──────────────── */}
             {sendMode === 'bulk' && (
@@ -766,12 +765,12 @@ export default function EnquiryPage() {
                 {/* Idle state — prompt to generate */}
                 {bulkStatus === 'idle' && (
                   <div className="flex flex-col items-center gap-4 py-8 text-center">
-                    <div className="text-gray-600 text-4xl">✦</div>
+                    <div className="text-gray-500 text-4xl">✦</div>
                     <div>
-                      <p className="text-sm font-medium text-gray-300">Generate bulk template</p>
+                      <p className="text-sm font-medium text-gray-700">Generate bulk template</p>
                       <p className="text-xs text-gray-500 mt-1 max-w-sm">
                         AI will draft one IP-safe email with{' '}
-                        <code className="text-amber-400">{'{{CRO_NAME}}'}</code> as a placeholder.
+                        <code className="text-amber-600">{'{{CRO_NAME}}'}</code> as a placeholder.
                         Each CRO receives a personalised copy on send.
                       </p>
                     </div>
@@ -782,7 +781,7 @@ export default function EnquiryPage() {
                       ✦ Generate bulk template →
                     </button>
                     {bulkError && (
-                      <p className="text-xs text-red-400">⚠ {bulkError}</p>
+                      <p className="text-xs text-red-600">⚠ {bulkError}</p>
                     )}
                   </div>
                 )}
@@ -803,24 +802,24 @@ export default function EnquiryPage() {
                   <>
                     {/* All-sent banner */}
                     {allBulkSent && (
-                      <div className="flex items-center gap-2 rounded-lg border border-green-700/40 bg-green-950/30 px-3 py-2.5">
-                        <span className="text-green-400">✓</span>
-                        <p className="text-xs text-green-300">
+                      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+                        <span className="text-green-600">✓</span>
+                        <p className="text-xs text-green-700">
                           All {cros.length} CROs contacted. View in{' '}
-                          <a href="/biotech/engagements" className="underline hover:text-green-200">engagements</a>.
+                          <a href="/biotech/engagements" className="underline hover:text-green-800">engagements</a>.
                         </p>
                       </div>
                     )}
 
                     {bulkError && (
-                      <div className="flex items-center gap-2 rounded-lg border border-red-700/40 bg-red-950/30 px-3 py-2">
-                        <p className="text-xs text-red-400">⚠ {bulkError}</p>
+                      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                        <p className="text-xs text-red-600">⚠ {bulkError}</p>
                       </div>
                     )}
 
                     {/* Variable hint */}
-                    <div className="rounded-lg border border-amber-800/30 bg-amber-950/20 px-3 py-2">
-                      <p className="text-xs text-amber-400/80">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                      <p className="text-xs text-amber-600">
                         <code className="font-mono">{'{{CRO_NAME}}'}</code> will be replaced with each CRO&apos;s name on send.
                         You can use it anywhere in the subject or body.
                       </p>
@@ -834,7 +833,7 @@ export default function EnquiryPage() {
                         value={bulkSubject}
                         disabled={bulkStatus === 'sending'}
                         onChange={e => setBulkSubject(e.target.value)}
-                        className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                       />
                     </div>
 
@@ -845,7 +844,7 @@ export default function EnquiryPage() {
                         <button
                           onClick={handleGenerateBulkTemplate}
                           disabled={bulkStatus === 'sending'}
-                          className="text-xs text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-40"
+                          className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
                         >
                           ↺ Re-draft
                         </button>
@@ -855,24 +854,24 @@ export default function EnquiryPage() {
                         disabled={bulkStatus === 'sending'}
                         onChange={e => setBulkBody(e.target.value)}
                         rows={14}
-                        className="w-full resize-y rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                        className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                       />
                     </div>
 
                     {/* Send controls */}
-                    <div className="flex items-center justify-between gap-3 border-t border-gray-800 pt-3">
-                      <span className="text-xs text-gray-600">
+                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
+                      <span className="text-xs text-gray-500">
                         {bulkBody
                           ? `${bulkBody.split(/\s+/).filter(Boolean).length} words · sending to ${cros.filter(c => c.email).length} CRO${cros.length !== 1 ? 's' : ''}`
                           : null}
                         {bulkErrorCount > 0 && (
-                          <span className="text-red-400"> · {bulkErrorCount} failed</span>
+                          <span className="text-red-600"> · {bulkErrorCount} failed</span>
                         )}
                       </span>
                       <button
                         onClick={handleSendBulk}
                         disabled={bulkStatus === 'sending' || allBulkSent || !bulkBody.trim()}
-                        className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500"
+                        className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                       >
                         {bulkStatus === 'sending'
                           ? `Sending… (${bulkSentCount}/${cros.filter(c => c.email).length})`
@@ -890,12 +889,12 @@ export default function EnquiryPage() {
             {sendMode === 'individual' && (
               <>
                 {/* Tab bar */}
-                <div className="flex overflow-x-auto border-b border-gray-700/60 bg-gray-900/80">
+                <div className="flex overflow-x-auto border-b border-gray-200 bg-gray-50">
                   {cros.map(cro => {
                     const d = drafts[cro.id];
                     const isActive = cro.id === activeCroId;
                     const dotClass =
-                      !d                                                  ? 'bg-gray-600' :
+                      !d                                                  ? 'bg-gray-300' :
                       d.status === 'sent'                                 ? 'bg-green-500' :
                       d.status === 'error'                                ? 'bg-red-500' :
                       d.status === 'generating' || d.status === 'sending' ? 'bg-yellow-500 animate-pulse' :
@@ -904,13 +903,13 @@ export default function EnquiryPage() {
                       <button
                         key={cro.id}
                         onClick={() => setActiveCroId(cro.id)}
-                        className={`flex shrink-0 items-center gap-2 border-r border-gray-700/60 px-4 py-3 text-sm transition-colors ${
-                          isActive ? 'bg-gray-800 text-white font-medium' : 'text-gray-500 hover:bg-gray-800/50 hover:text-gray-300'
+                        className={`flex shrink-0 items-center gap-2 border-r border-gray-200 px-4 py-3 text-sm transition-colors ${
+                          isActive ? 'bg-white text-gray-900 font-medium' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
                         }`}
                       >
                         <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
                         <span className="max-w-[120px] truncate">{cro.name}</span>
-                        {d?.status === 'sent' && <span className="text-[10px] text-green-400">✓</span>}
+                        {d?.status === 'sent' && <span className="text-[10px] text-green-600">✓</span>}
                       </button>
                     );
                   })}
@@ -932,11 +931,11 @@ export default function EnquiryPage() {
                     )}
 
                     {activeDraft?.status === 'error' && (
-                      <div className="flex items-center justify-between gap-3 rounded-lg border border-red-700/40 bg-red-950/30 px-3 py-2.5">
-                        <p className="text-xs text-red-400">⚠ {activeDraft.errorMsg}</p>
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                        <p className="text-xs text-red-600">⚠ {activeDraft.errorMsg}</p>
                         <button
                           onClick={() => handleRedraft(activeCro)}
-                          className="shrink-0 rounded border border-red-700/40 px-2 py-1 text-xs text-red-400 hover:text-red-300 transition-colors"
+                          className="shrink-0 rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:text-red-700 transition-colors"
                         >
                           Retry
                         </button>
@@ -944,9 +943,9 @@ export default function EnquiryPage() {
                     )}
 
                     {activeDraft?.status === 'sent' && (
-                      <div className="flex items-center gap-2 rounded-lg border border-green-700/40 bg-green-950/30 px-3 py-2.5">
-                        <span className="text-green-400">✓</span>
-                        <p className="text-xs text-green-300">
+                      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+                        <span className="text-green-600">✓</span>
+                        <p className="text-xs text-green-700">
                           {activeDraft.errorMsg
                             ? `Saved (not sent — ${activeDraft.errorMsg})`
                             : `Sent to ${activeCro.email}`}
@@ -957,8 +956,8 @@ export default function EnquiryPage() {
                     {/* To */}
                     <div>
                       <p className="mb-1 text-xs text-gray-500">To</p>
-                      <div className="rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-gray-400">
-                        {activeCro.email ?? <span className="text-red-400">No email address — cannot send</span>}
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                        {activeCro.email ?? <span className="text-red-600">No email address — cannot send</span>}
                       </div>
                     </div>
 
@@ -974,10 +973,10 @@ export default function EnquiryPage() {
                             ...prev,
                             [activeCro.id]: { ...prev[activeCro.id], subject: e.target.value },
                           }))}
-                          className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       ) : (
-                        <div className="h-9 animate-pulse rounded-lg border border-gray-700 bg-gray-800/40" />
+                        <div className="h-9 animate-pulse rounded-lg border border-gray-200 bg-gray-100" />
                       )}
                     </div>
 
@@ -988,7 +987,7 @@ export default function EnquiryPage() {
                         {activeDraft?.status === 'ready' && (
                           <button
                             onClick={() => handleRedraft(activeCro)}
-                            className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
                           >
                             ↺ Re-draft
                           </button>
@@ -1003,16 +1002,16 @@ export default function EnquiryPage() {
                             [activeCro.id]: { ...prev[activeCro.id], body: e.target.value },
                           }))}
                           rows={12}
-                          className="w-full resize-y rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       ) : (
-                        <div className="h-48 animate-pulse rounded-lg border border-gray-700 bg-gray-800/40" />
+                        <div className="h-48 animate-pulse rounded-lg border border-gray-200 bg-gray-100" />
                       )}
                     </div>
 
                     {/* Send controls */}
-                    <div className="flex items-center justify-between gap-3 border-t border-gray-800 pt-3">
-                      <span className="text-xs text-gray-600">
+                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
+                      <span className="text-xs text-gray-500">
                         {activeDraft?.body
                           ? `${activeDraft.body.split(/\s+/).filter(Boolean).length} words`
                           : null}
@@ -1026,7 +1025,7 @@ export default function EnquiryPage() {
                           !activeDraft.engagementId ||
                           !activeDraft.messageId
                         }
-                        className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500"
+                        className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                       >
                         {activeDraft?.status === 'sending' ? 'Sending…' : 'Approve & Send →'}
                       </button>
@@ -1039,7 +1038,7 @@ export default function EnquiryPage() {
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col gap-3 border-t border-gray-800 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-gray-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-gray-500">
             {sendMode === 'individual' && (
               allSent
@@ -1056,7 +1055,7 @@ export default function EnquiryPage() {
             {sendMode === 'individual' && readyCount > 1 && !allSent && (
               <button
                 onClick={handleSendAll}
-                className="rounded-lg border border-blue-600/40 bg-blue-600/10 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-600/20"
+                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
               >
                 Send all ready ({readyCount})
               </button>

@@ -55,13 +55,13 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_COLORS: Record<string, string> = {
-  meeting_done:       'bg-purple-900/30 text-purple-300 border-purple-700/40',
-  rfp_draft:          'bg-blue-900/30 text-blue-300 border-blue-700/40',
-  rfp_sent:           'bg-green-900/30 text-green-300 border-green-700/40',
-  awarded:            'bg-green-900/50 text-green-200 border-green-700/60',
-  meeting_scheduled:  'bg-indigo-900/30 text-indigo-300 border-indigo-700/40',
-  followup_sent:      'bg-amber-900/30 text-amber-300 border-amber-700/40',
-  default:            'bg-gray-800/60 text-gray-400 border-gray-700',
+  meeting_done:       'bg-purple-50 text-purple-700 border-purple-200',
+  rfp_draft:          'bg-blue-50 text-blue-700 border-blue-200',
+  rfp_sent:           'bg-green-50 text-green-700 border-green-200',
+  awarded:            'bg-green-50 text-green-700 border-green-200',
+  meeting_scheduled:  'bg-indigo-50 text-indigo-700 border-indigo-200',
+  followup_sent:      'bg-amber-50 text-amber-700 border-amber-200',
+  default:            'bg-gray-100 text-gray-500 border-gray-200',
 };
 
 function stageColor(stage: string) {
@@ -69,9 +69,9 @@ function stageColor(stage: string) {
 }
 
 function completenessColor(score: number) {
-  if (score >= 80) return { ring: '#22c55e', text: 'text-green-400', label: 'Ready to send', bg: 'border-green-700/40 bg-green-900/20' };
-  if (score >= 50) return { ring: '#f59e0b', text: 'text-amber-400', label: 'Gaps remain',   bg: 'border-amber-700/40 bg-amber-900/20' };
-  return             { ring: '#ef4444', text: 'text-red-400',   label: 'Incomplete',   bg: 'border-red-700/40 bg-red-900/20' };
+  if (score >= 80) return { ring: '#22c55e', text: 'text-green-700', label: 'Ready to send', bg: 'border-green-200 bg-green-50' };
+  if (score >= 50) return { ring: '#f59e0b', text: 'text-amber-700', label: 'Gaps remain',   bg: 'border-amber-200 bg-amber-50' };
+  return             { ring: '#ef4444', text: 'text-red-700',   label: 'Incomplete',   bg: 'border-red-200 bg-red-50' };
 }
 
 function countSections(rfpDoc: RfpDoc): { filled: number; withGaps: number } {
@@ -106,25 +106,25 @@ function ConfirmModal({
   const { label: scoreLabel, text: scoreText } = completenessColor(score);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-900 shadow-2xl p-7">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl p-7">
         <div className="flex items-start gap-4 mb-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600/20 text-blue-400 text-xl">
             📤
           </div>
           <div>
-            <h2 className="text-base font-semibold text-white">Send {rfpId}?</h2>
+            <h2 className="text-base font-semibold text-gray-900">Send {rfpId}?</h2>
             <p className="text-sm text-gray-500 mt-0.5">This will email the full RFP to the selected CROs.</p>
           </div>
         </div>
 
         {/* Recipients */}
-        <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 mb-4 space-y-2">
+        <div className="rounded-xl border border-gray-200 bg-gray-100 p-4 mb-4 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
             Recipients ({cros.length})
           </p>
           {cros.map(c => (
             <div key={c.id} className="flex items-center justify-between text-sm">
-              <span className="text-gray-200 font-medium">{c.cro_name}</span>
+              <span className="text-gray-800 font-medium">{c.cro_name}</span>
               <span className="text-gray-500 text-xs">{c.cro_email}</span>
             </div>
           ))}
@@ -156,7 +156,7 @@ function ConfirmModal({
           <button
             onClick={onCancel}
             disabled={sending}
-            className="flex-1 rounded-xl border border-gray-700 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-50"
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-900 disabled:opacity-50"
           >
             Cancel
           </button>
@@ -279,7 +279,7 @@ export default function RfpSendPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <svg className="h-6 w-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -290,10 +290,10 @@ export default function RfpSendPage() {
 
   if (!rfpDoc) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="text-center max-w-sm">
           <p className="text-4xl mb-4">📄</p>
-          <h1 className="text-lg font-semibold text-white mb-2">No RFP generated yet</h1>
+          <h1 className="text-lg font-semibold text-gray-900 mb-2">No RFP generated yet</h1>
           <p className="text-sm text-gray-500 mb-6">Generate the RFP document before sending.</p>
           <a
             href={`/biotech/briefs/${briefId}/rfp`}
@@ -324,27 +324,27 @@ export default function RfpSendPage() {
         />
       )}
 
-      <div className="min-h-screen bg-gray-950 text-gray-100">
+      <div className="min-h-screen bg-gray-50 text-gray-900">
         <div className="mx-auto max-w-3xl px-5 py-8 space-y-6">
 
           {/* ── Breadcrumb + Header ── */}
           <header>
-            <nav className="mb-2 text-xs text-gray-600">
-              <a href="/biotech/dashboard" className="hover:text-gray-400 transition-colors">Dashboard</a>
+            <nav className="mb-2 text-xs text-gray-500">
+              <a href="/biotech/dashboard" className="hover:text-gray-700 transition-colors">Dashboard</a>
               <span className="mx-1.5">/</span>
-              <a href="/biotech/briefs" className="hover:text-gray-400 transition-colors">Briefs</a>
+              <a href="/biotech/briefs" className="hover:text-gray-700 transition-colors">Briefs</a>
               <span className="mx-1.5">/</span>
-              <a href={`/biotech/briefs/${briefId}`} className="hover:text-gray-400 transition-colors">
+              <a href={`/biotech/briefs/${briefId}`} className="hover:text-gray-700 transition-colors">
                 {brief?.title ?? 'Brief'}
               </a>
               <span className="mx-1.5">/</span>
-              <a href={`/biotech/briefs/${briefId}/rfp`} className="hover:text-gray-400 transition-colors">RFP</a>
+              <a href={`/biotech/briefs/${briefId}/rfp`} className="hover:text-gray-700 transition-colors">RFP</a>
               <span className="mx-1.5">/</span>
-              <span className="text-gray-400">Send</span>
+              <span className="text-gray-500">Send</span>
             </nav>
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <h1 className="text-2xl font-semibold text-white">Send RFP</h1>
+                <h1 className="text-2xl font-semibold text-gray-900">Send RFP</h1>
                 <p className="mt-1 text-sm text-gray-500">
                   {rfpDoc.rfp_id} · {brief?.title ?? 'Study brief'}
                 </p>
@@ -353,7 +353,7 @@ export default function RfpSendPage() {
                 href={`/biotech/briefs/${briefId}/rfp/print`}
                 target="_blank"
                 rel="noopener"
-                className="flex items-center gap-1.5 rounded-xl border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:border-gray-500 hover:text-gray-200 transition-colors"
+                className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-900 transition-colors"
               >
                 🖨 Preview / Print
               </a>
@@ -371,7 +371,7 @@ export default function RfpSendPage() {
                 <p className={`text-sm font-medium mt-1 ${scoreText}`}>{scoreLabel}</p>
               </div>
               <div className="text-right text-sm space-y-1">
-                <p className="text-gray-400"><span className="text-white font-semibold">{filled}</span> / {SECTION_KEYS.length} sections filled</p>
+                <p className="text-gray-500"><span className="text-gray-900 font-semibold">{filled}</span> / {SECTION_KEYS.length} sections filled</p>
                 {withGaps > 0 && (
                   <p className="text-amber-400">{withGaps} section{withGaps !== 1 ? 's' : ''} have [TO BE SPECIFIED] gaps</p>
                 )}
@@ -389,26 +389,26 @@ export default function RfpSendPage() {
           </div>
 
           {/* ── CRO selection ── */}
-          <div className="rounded-xl border border-gray-700 bg-gray-900/40 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
+          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
-                <h2 className="text-sm font-semibold text-white">Select Recipients</h2>
+                <h2 className="text-sm font-semibold text-gray-900">Select Recipients</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {engagements.length} eligible CRO{engagements.length !== 1 ? 's' : ''} ·{' '}
                   {selected.size} selected
                 </p>
               </div>
               <div className="flex gap-2 text-xs">
-                <button onClick={selectAll}  className="text-blue-400 hover:text-blue-300 transition-colors">All</button>
-                <span className="text-gray-700">·</span>
-                <button onClick={selectNone} className="text-gray-500 hover:text-gray-300 transition-colors">None</button>
+                <button onClick={selectAll}  className="text-blue-400 hover:text-blue-600 transition-colors">All</button>
+                <span className="text-gray-400">·</span>
+                <button onClick={selectNone} className="text-gray-500 hover:text-gray-700 transition-colors">None</button>
               </div>
             </div>
 
             {engagements.length === 0 ? (
               <div className="px-5 py-12 text-center">
-                <p className="text-gray-600 text-sm">No eligible CROs found for this brief.</p>
-                <p className="text-gray-700 text-xs mt-1">
+                <p className="text-gray-500 text-sm">No eligible CROs found for this brief.</p>
+                <p className="text-gray-400 text-xs mt-1">
                   CROs must have at least responded to your enquiry before receiving an RFP.
                 </p>
                 <a
@@ -419,7 +419,7 @@ export default function RfpSendPage() {
                 </a>
               </div>
             ) : (
-              <ul className="divide-y divide-gray-800/60">
+              <ul className="divide-y divide-gray-100">
                 {engagements.map(eng => {
                   const sendStatus = sendResults[eng.id];
                   return (
@@ -444,7 +444,7 @@ export default function RfpSendPage() {
                         <div className={`h-5 w-5 shrink-0 rounded-full flex items-center justify-center text-xs ${
                           sendStatus === 'sent'   ? 'bg-green-600 text-white' :
                           sendStatus === 'failed' ? 'bg-red-600 text-white'   :
-                                                    'bg-gray-700 text-gray-500'
+                                                    'bg-gray-100 text-gray-500'
                         }`}>
                           {sendStatus === 'sent' ? '✓' : sendStatus === 'failed' ? '✗' : '—'}
                         </div>
@@ -452,7 +452,7 @@ export default function RfpSendPage() {
 
                       {/* CRO info */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{eng.cro_name}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{eng.cro_name}</p>
                         <p className="text-xs text-gray-500 truncate">{eng.cro_email}</p>
                       </div>
 
@@ -462,7 +462,7 @@ export default function RfpSendPage() {
                           {STAGE_LABELS[eng.stage] ?? eng.stage}
                         </span>
                         {(eng.stage === 'rfp_sent' || eng.stage === 'awarded') && (
-                          <span className="text-[10px] text-gray-600">ℹ resend</span>
+                          <span className="text-[10px] text-gray-400">ℹ resend</span>
                         )}
                       </div>
 
@@ -488,7 +488,7 @@ export default function RfpSendPage() {
             <div className="flex items-center justify-between gap-4">
               <a
                 href={`/biotech/briefs/${briefId}/rfp`}
-                className="text-sm text-gray-500 hover:text-gray-300 transition-colors"
+                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
               >
                 ← Back to editor
               </a>
@@ -501,19 +501,19 @@ export default function RfpSendPage() {
               </button>
             </div>
           ) : (
-            <div className="rounded-xl border border-green-700/40 bg-green-950/20 px-5 py-4">
+            <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-4">
               <div className="flex items-start gap-3">
-                <span className="text-green-400 text-xl leading-none mt-0.5">✓</span>
+                <span className="text-green-700 text-xl leading-none mt-0.5">✓</span>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-green-300">RFP send complete</p>
-                  <p className="text-xs text-green-700 mt-1">
+                  <p className="text-sm font-semibold text-green-700">RFP send complete</p>
+                  <p className="text-xs text-green-600 mt-1">
                     {Object.values(sendResults).filter(s => s === 'sent').length} sent ·{' '}
                     {Object.values(sendResults).filter(s => s === 'failed').length} failed
                   </p>
                 </div>
                 <a
                   href={`/biotech/engagements`}
-                  className="shrink-0 text-xs text-green-400 hover:text-green-300 transition-colors underline"
+                  className="shrink-0 text-xs text-green-700 hover:text-green-800 transition-colors underline"
                 >
                   View engagements →
                 </a>

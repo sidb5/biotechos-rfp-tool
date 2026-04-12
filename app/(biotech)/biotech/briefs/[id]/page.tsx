@@ -211,7 +211,7 @@ export default function BriefPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <svg className="h-6 w-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -222,7 +222,7 @@ export default function BriefPage() {
 
   if (!brief) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-500 text-sm">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500 text-sm">
         Brief not found.{' '}
         <a href="/biotech/briefs" className="ml-2 text-blue-400 hover:underline">Back to briefs</a>
       </div>
@@ -232,27 +232,27 @@ export default function BriefPage() {
   const isEmptyDB = allCROs.length === 0;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-5xl px-5 py-10 space-y-8">
 
         {/* ── Header ── */}
         <header>
-          <nav className="mb-1.5 text-xs text-gray-600">
-            <a href="/biotech/briefs" className="hover:text-gray-400 transition-colors">Briefs</a>
+          <nav className="mb-1.5 text-xs text-gray-500">
+            <a href="/biotech/briefs" className="hover:text-gray-700 transition-colors">Briefs</a>
             <span className="mx-1.5">/</span>
-            <span className="text-gray-400">{brief.title ?? 'Untitled brief'}</span>
+            <span className="text-gray-700">{brief.title ?? 'Untitled brief'}</span>
           </nav>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold text-white">{brief.title}</h1>
+              <h1 className="text-2xl font-semibold text-gray-900">{brief.title}</h1>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 {brief.classification && (
-                  <span className="text-xs rounded-full bg-blue-900/40 border border-blue-700/40 text-blue-300 px-2.5 py-0.5 uppercase tracking-wide font-medium">
+                  <span className="text-xs rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-0.5 uppercase tracking-wide font-medium">
                     {brief.classification}
                   </span>
                 )}
                 {brief.extracted_data?.glp_requirement?.value && (
-                  <span className="text-xs rounded-full bg-purple-900/40 border border-purple-700/40 text-purple-300 px-2.5 py-0.5">
+                  <span className="text-xs rounded-full bg-purple-50 border border-purple-200 text-purple-700 px-2.5 py-0.5">
                     {brief.extracted_data.glp_requirement.value}
                   </span>
                 )}
@@ -266,13 +266,13 @@ export default function BriefPage() {
             <div className="flex items-center gap-2 shrink-0">
               <a
                 href={`/biotech/briefs/${briefId}/rfp`}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600/10 border border-blue-700/40 text-blue-300 hover:bg-blue-600/20 px-3 py-1.5 text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 px-3 py-1.5 text-xs font-medium transition-colors"
               >
                 📄 RFP
               </a>
               <a
                 href={`/biotech/briefs/${briefId}/extract`}
-                className="text-xs text-gray-600 hover:text-gray-400 border border-gray-700 hover:border-gray-600 rounded-lg px-3 py-1.5 transition-colors"
+                className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 transition-colors"
               >
                 Edit brief
               </a>
@@ -282,9 +282,9 @@ export default function BriefPage() {
 
         {/* ── Step label ── */}
         <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-gray-800" />
+          <div className="h-px flex-1 bg-gray-200" />
           <span className="text-xs font-medium text-gray-500 uppercase tracking-widest">Step 2 — Select CROs to contact</span>
-          <div className="h-px flex-1 bg-gray-800" />
+          <div className="h-px flex-1 bg-gray-200" />
         </div>
 
         {isEmptyDB ? (
@@ -292,17 +292,17 @@ export default function BriefPage() {
              EMPTY DATABASE STATE — manual entry
           ══════════════════════════════════════════════════════════════ */
           <div className="space-y-6">
-            <div className="rounded-xl border border-blue-800/40 bg-blue-950/20 px-6 py-5 text-sm text-blue-300">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-6 py-5 text-sm text-blue-700">
               <p className="font-medium mb-1">CRO database coming soon</p>
-              <p className="text-blue-400/70">
+              <p className="text-blue-600">
                 Enter CRO names and email addresses manually to proceed.
                 The platform will match against a curated CRO database in a future update.
               </p>
             </div>
 
             {/* Manual entry form */}
-            <div className="rounded-xl border border-gray-700 bg-gray-900/60 p-5 space-y-4">
-              <h2 className="text-sm font-medium text-gray-300">Add CROs manually</h2>
+            <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+              <h2 className="text-sm font-medium text-gray-700">Add CROs manually</h2>
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
@@ -312,7 +312,7 @@ export default function BriefPage() {
                     value={manualName}
                     onChange={e => setManualName(e.target.value)}
                     placeholder="Labcorp, Covance, Charles River…"
-                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div className="flex-1">
@@ -323,14 +323,14 @@ export default function BriefPage() {
                     onChange={e => { setManualEmail(e.target.value); setManualEmailError(''); }}
                     onKeyDown={e => e.key === 'Enter' && addManualEntry()}
                     placeholder="bd@cro.com"
-                    className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 ${
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 ${
                       manualEmailError && !manualEmailError.startsWith('ℹ')
-                        ? 'border-red-600 focus:ring-red-500 focus:border-red-500'
-                        : 'border-gray-700 focus:ring-blue-500 focus:border-blue-500'
+                        ? 'border-red-400 focus:ring-red-400 focus:border-red-400'
+                        : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
                     }`}
                   />
                   {manualEmailError && (
-                    <p className={`mt-1 text-xs ${manualEmailError.startsWith('ℹ') ? 'text-blue-400' : 'text-red-400'}`}>
+                    <p className={`mt-1 text-xs ${manualEmailError.startsWith('ℹ') ? 'text-blue-600' : 'text-red-400'}`}>
                       {manualEmailError}
                     </p>
                   )}
@@ -340,7 +340,7 @@ export default function BriefPage() {
                     type="button"
                     onClick={addManualEntry}
                     disabled={manualEntries.length >= 20}
-                    className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm text-gray-200 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm text-gray-700 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     + Add
                   </button>
@@ -351,24 +351,24 @@ export default function BriefPage() {
               {manualEntries.length > 0 && (
                 <div className="space-y-2">
                   {manualEntries.map(entry => (
-                    <div key={entry.id} className="flex items-center justify-between rounded-lg border border-green-800/40 bg-green-950/30 px-3 py-2 text-sm">
+                    <div key={entry.id} className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
                       <div className="flex items-center gap-3">
                         <svg className="h-3.5 w-3.5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>
-                        <span className="text-gray-200 font-medium">{entry.name}</span>
+                        <span className="text-gray-900 font-medium">{entry.name}</span>
                         <span className="text-gray-500">{entry.email}</span>
                       </div>
                       <button
                         onClick={() => removeManualEntry(entry.id)}
-                        className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none ml-2"
+                        className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none ml-2"
                         aria-label="Remove"
                       >
                         ×
                       </button>
                     </div>
                   ))}
-                  <p className="text-xs text-gray-600">{manualEntries.length} / 20 CROs added</p>
+                  <p className="text-xs text-gray-500">{manualEntries.length} / 20 CROs added</p>
                 </div>
               )}
             </div>
@@ -381,7 +381,7 @@ export default function BriefPage() {
           <div className="space-y-5">
 
             {/* Filter bar */}
-            <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-4 space-y-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
 
               {/* Row 1: BIOSECURE toggle (prominent) */}
               <div className="flex flex-wrap items-center gap-6">
@@ -390,13 +390,13 @@ export default function BriefPage() {
                     role="switch"
                     aria-checked={biosecureOnly}
                     onClick={() => setBiosecureOnly(v => !v)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
-                      biosecureOnly ? 'bg-blue-600' : 'bg-gray-600'
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white ${
+                      biosecureOnly ? 'bg-blue-600' : 'bg-gray-300'
                     }`}
                   >
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${biosecureOnly ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
-                  <span className="text-sm font-medium text-gray-200">
+                  <span className="text-sm font-medium text-gray-800">
                     BIOSECURE Act compliant
                     <span className="ml-1.5 text-xs text-gray-500 font-normal">US / EU / UK only</span>
                   </span>
@@ -409,9 +409,9 @@ export default function BriefPage() {
                       type="checkbox"
                       checked={glpOnly}
                       onChange={e => setGlpOnly(e.target.checked)}
-                      className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+                      className="h-4 w-4 rounded border-gray-300 bg-white text-blue-500 focus:ring-blue-500 focus:ring-offset-white"
                     />
-                    <span className="text-sm text-gray-300">GLP certified only</span>
+                    <span className="text-sm text-gray-700">GLP certified only</span>
                   </label>
                 )}
 
@@ -425,7 +425,7 @@ export default function BriefPage() {
                       className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
                         sizeFilter === s
                           ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-400'
                       }`}
                     >
                       {s}
@@ -436,7 +436,7 @@ export default function BriefPage() {
 
               {/* Row 2: Region checkboxes — only when BIOSECURE is OFF */}
               {!biosecureOnly && (
-                <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-800">
+                <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200">
                   <span className="text-xs text-gray-500">Region:</span>
                   {['US', 'EU', 'UK', 'APAC'].map(r => (
                     <label key={r} className="flex items-center gap-1.5 cursor-pointer">
@@ -448,9 +448,9 @@ export default function BriefPage() {
                             e.target.checked ? [...prev, r] : prev.filter(x => x !== r)
                           );
                         }}
-                        className="h-3.5 w-3.5 rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+                        className="h-3.5 w-3.5 rounded border-gray-300 bg-white text-blue-500 focus:ring-blue-500 focus:ring-offset-white"
                       />
-                      <span className="text-sm text-gray-300">{r}</span>
+                      <span className="text-sm text-gray-700">{r}</span>
                     </label>
                   ))}
                 </div>
@@ -459,20 +459,20 @@ export default function BriefPage() {
 
             {/* Selection controls */}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-gray-500">
                 {filteredCROs.length} CRO{filteredCROs.length !== 1 ? 's' : ''} match
                 {selectedIds.size > 0 && (
-                  <span className="ml-2 font-medium text-blue-400">
+                  <span className="ml-2 font-medium text-blue-600">
                     — {selectedIds.size} selected
                   </span>
                 )}
               </span>
               <div className="flex gap-3 text-xs">
-                <button onClick={selectAll} className="text-blue-400 hover:text-blue-300 transition-colors">
+                <button onClick={selectAll} className="text-blue-600 hover:text-blue-700 transition-colors">
                   Select all filtered
                 </button>
-                <span className="text-gray-700">·</span>
-                <button onClick={clearAll} className="text-gray-500 hover:text-gray-300 transition-colors">
+                <span className="text-gray-300">·</span>
+                <button onClick={clearAll} className="text-gray-500 hover:text-gray-700 transition-colors">
                   Clear all
                 </button>
               </div>
@@ -480,7 +480,7 @@ export default function BriefPage() {
 
             {/* CRO cards */}
             {filteredCROs.length === 0 ? (
-              <div className="rounded-xl border border-gray-800 bg-gray-900/30 px-6 py-10 text-center text-sm text-gray-600">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm text-gray-500">
                 No CROs match the current filters. Try relaxing the BIOSECURE or GLP filters.
               </div>
             ) : (
@@ -498,15 +498,15 @@ export default function BriefPage() {
                       onClick={() => toggleCRO(cro.id)}
                       className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         selected
-                          ? 'border-blue-500 bg-blue-950/30'
-                          : 'border-gray-700/60 bg-gray-900/60 hover:border-gray-600'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 min-w-0">
                           {/* Checkbox — always shown */}
                           <div className={`shrink-0 h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
-                            selected ? 'bg-blue-600 border-blue-500' : 'border-gray-600'
+                            selected ? 'bg-blue-600 border-blue-500' : 'border-gray-300'
                           }`}>
                             {selected && (
                               <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -514,10 +514,10 @@ export default function BriefPage() {
                               </svg>
                             )}
                           </div>
-                          <span className="font-medium text-sm text-white truncate">{cro.name}</span>
+                          <span className="font-medium text-sm text-gray-900 truncate">{cro.name}</span>
                           {/* Info badge — non-blocking, just informational */}
                           {alreadySent && (
-                            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-blue-700/40 bg-blue-900/20 text-blue-400">
+                            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-600">
                               ℹ contacted
                             </span>
                           )}
@@ -526,10 +526,10 @@ export default function BriefPage() {
                         {(cro as any).score > 0 && (
                           <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
                             (cro as any).score >= 80
-                              ? 'bg-green-900/50 text-green-300 border border-green-700/40'
+                              ? 'bg-green-50 text-green-700 border border-green-200'
                               : (cro as any).score >= 40
-                              ? 'bg-amber-900/40 text-amber-300 border border-amber-700/40'
-                              : 'bg-gray-800 text-gray-500 border border-gray-700/40'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-gray-100 text-gray-500 border border-gray-200'
                           }`}>
                             {(cro as any).score}% match
                           </span>
@@ -546,17 +546,17 @@ export default function BriefPage() {
                       {/* Badges */}
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         {cro.biosecure_compliant && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-blue-700/50 bg-blue-900/30 text-blue-300 font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 font-medium">
                             BIOSECURE
                           </span>
                         )}
                         {cro.glp_certified && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-700/50 bg-purple-900/30 text-purple-300 font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 font-medium">
                             GLP
                           </span>
                         )}
                         {cro.size_category && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-700 bg-gray-800 text-gray-400 capitalize">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-gray-100 text-gray-500 capitalize">
                             {cro.size_category}
                           </span>
                         )}
@@ -566,7 +566,7 @@ export default function BriefPage() {
                       {cro.specialties?.length ? (
                         <div className="flex flex-wrap gap-1">
                           {cro.specialties.map(s => (
-                            <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700/50">
+                            <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
                               {s}
                             </span>
                           ))}
@@ -581,7 +581,7 @@ export default function BriefPage() {
         )}
 
         {/* ── Proceed footer ── */}
-        <div className="border-t border-gray-800 pt-6 flex items-center justify-between gap-4">
+        <div className="border-t border-gray-200 pt-6 flex items-center justify-between gap-4">
           <p className="text-sm text-gray-500">
             {totalSelected > 0
               ? `${totalSelected} CRO${totalSelected !== 1 ? 's' : ''} selected — next: draft IP-safe capability enquiry`
@@ -590,9 +590,9 @@ export default function BriefPage() {
           <button
             onClick={handleProceed}
             disabled={totalSelected === 0}
-            className="px-6 py-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950
+            className="px-6 py-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white
               bg-blue-600 hover:bg-blue-500 text-white
-              disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed"
+              disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
           >
             Proceed to outreach →
           </button>

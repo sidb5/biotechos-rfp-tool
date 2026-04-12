@@ -338,14 +338,14 @@ export default function NewBriefPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-gray-50 text-gray-900">
 
       {/* ── PRIVATE banner ── */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-amber-800/30 bg-amber-950/70 px-5 py-2.5 backdrop-blur">
-        <span className="shrink-0 rounded border border-amber-700 bg-amber-900/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-300">
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2.5 backdrop-blur">
+        <span className="shrink-0 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
           PRIVATE
         </span>
-        <p className="text-xs text-amber-300/70">
+        <p className="text-xs text-amber-600">
           Not shared with CROs — nothing leaves this vault until you explicitly approve each outbound message.
         </p>
       </div>
@@ -354,15 +354,15 @@ export default function NewBriefPage() {
 
         {/* ── Page header ── */}
         <header>
-          <nav className="mb-1.5 text-xs text-gray-600">
-            <a href="/biotech/briefs" className="transition-colors hover:text-gray-400">
+          <nav className="mb-1.5 text-xs text-gray-500">
+            <a href="/biotech/briefs" className="transition-colors hover:text-gray-600">
               Briefs
             </a>
             <span className="mx-1.5">/</span>
-            <span className="text-gray-400">New</span>
+            <span className="text-gray-500">New</span>
           </nav>
-          <h1 className="text-2xl font-semibold text-white">New Study Brief</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-semibold text-gray-900">New Study Brief</h1>
+          <p className="mt-1 text-sm text-gray-500">
             Dump everything you know. Combine text, documents, and voice — the more detail,
             the better the AI can help you find and brief CROs.
           </p>
@@ -372,13 +372,13 @@ export default function NewBriefPage() {
             INPUT 1 — Freeform text
         ═══════════════════════════════════════════════════════════════ */}
         <section className="space-y-2">
-          <h2 className="text-sm font-medium text-gray-300">Write or paste</h2>
+          <h2 className="text-sm font-medium text-gray-700">Write or paste</h2>
           <textarea
             value={text}
             onChange={e => setText(e.target.value.slice(0, MAX_TEXT_CHARS))}
             placeholder="Dump everything you know — compound info, study type, timeline, budget, compliance needs, prior CRO experiences, constraints. This stays private."
             rows={12}
-            className="w-full resize-y rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-gray-100 placeholder-gray-600 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full resize-y rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <div className="flex justify-end">
             <span
@@ -396,8 +396,8 @@ export default function NewBriefPage() {
         ═══════════════════════════════════════════════════════════════ */}
         <section className="space-y-3">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-sm font-medium text-gray-300">Upload documents</h2>
-            <span className="text-xs text-gray-600">
+            <h2 className="text-sm font-medium text-gray-700">Upload documents</h2>
+            <span className="text-xs text-gray-500">
               PDF, DOCX, TXT, PPTX — up to {MAX_DOCS} files
             </span>
           </div>
@@ -411,10 +411,10 @@ export default function NewBriefPage() {
             className={[
               'rounded-xl border-2 border-dashed px-6 py-8 text-center transition-all',
               docs.length >= MAX_DOCS
-                ? 'cursor-not-allowed border-gray-800 opacity-40'
+                ? 'cursor-not-allowed border-gray-200 opacity-40'
                 : isDragging
                 ? 'cursor-copy border-blue-500 bg-blue-500/5'
-                : 'cursor-pointer border-gray-700 hover:border-gray-500',
+                : 'cursor-pointer border-gray-200 hover:border-gray-400',
             ].join(' ')}
           >
             <input
@@ -437,17 +437,17 @@ export default function NewBriefPage() {
             ) : (
               <>
                 {/* Upload icon */}
-                <svg className="mx-auto mb-2 h-7 w-7 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="mx-auto mb-2 h-7 w-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-gray-500">
                   Drag files here or{' '}
                   <span className="text-blue-400 transition-colors hover:text-blue-300">
                     browse
                   </span>
                 </p>
-                <p className="mt-1 text-xs text-gray-600">
+                <p className="mt-1 text-xs text-gray-400">
                   Text is extracted server-side — files are not stored
                 </p>
               </>
@@ -466,7 +466,7 @@ export default function NewBriefPage() {
               {docs.map((doc, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-1.5 rounded-full border border-green-800/50 bg-green-950/50 px-2.5 py-1 text-xs text-green-300"
+                  className="flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs text-green-700"
                 >
                   <svg className="h-3 w-3 shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -495,20 +495,20 @@ export default function NewBriefPage() {
         ═══════════════════════════════════════════════════════════════ */}
         <section className="space-y-3">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-sm font-medium text-gray-300">Voice input</h2>
-            <span className="text-xs text-gray-600">Chrome or Edge — up to 3 minutes</span>
+            <h2 className="text-sm font-medium text-gray-700">Voice input</h2>
+            <span className="text-xs text-gray-500">Chrome or Edge — up to 3 minutes</span>
           </div>
 
-          <div className="space-y-3 rounded-xl border border-gray-700/60 bg-gray-900/60 p-4">
+          <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={isListening ? stopListening : startListening}
                 className={[
-                  'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900',
+                  'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white',
                   isListening
                     ? 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500'
-                    : 'bg-gray-700 text-gray-200 hover:bg-gray-600 focus:ring-gray-500',
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-400',
                 ].join(' ')}
               >
                 {isListening ? (
@@ -548,7 +548,7 @@ export default function NewBriefPage() {
                   onChange={e => setVoiceTranscript(e.target.value)}
                   rows={4}
                   placeholder="Transcript will appear here as you speak…"
-                  className="w-full resize-y rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full resize-y rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
             )}
@@ -558,9 +558,9 @@ export default function NewBriefPage() {
         {/* ═══════════════════════════════════════════════════════════════
             Footer — status + generate button
         ═══════════════════════════════════════════════════════════════ */}
-        <div className="flex flex-col gap-3 border-t border-gray-800 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-gray-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3 text-xs">
-            <span className="tabular-nums text-gray-600">
+            <span className="tabular-nums text-gray-500">
               {totalChars.toLocaleString()} chars across all inputs
             </span>
             <SaveBadge status={saveStatus} error={saveError} />
@@ -571,12 +571,12 @@ export default function NewBriefPage() {
               type="button"
               onClick={handleGenerate}
               disabled={!canGenerate}
-              className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-950 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500"
+              className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             >
               Generate Brief →
             </button>
             {!canGenerate && totalChars > 0 && (
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-gray-500">
                 {MIN_CHARS_TO_GENERATE - totalChars} more characters needed
               </p>
             )}

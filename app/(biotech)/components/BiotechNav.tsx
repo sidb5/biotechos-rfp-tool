@@ -67,18 +67,18 @@ export default function BiotechNav() {
           onClick={() => setMobileOpen(false)}
           className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
             isActive(item.href)
-              ? 'bg-blue-600/20 text-blue-300'
-              : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+              ? 'bg-blue-50 text-blue-700'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
           }`}
         >
-          <span className={isActive(item.href) ? 'text-blue-400' : 'text-gray-600'}>
+          <span className={isActive(item.href) ? 'text-blue-600' : 'text-gray-400'}>
             {item.icon}
           </span>
           {item.label}
         </a>
       ))}
 
-      <div className="mt-auto pt-4 border-t border-gray-800 mx-1 space-y-1">
+      <div className="mt-auto pt-4 border-t border-gray-100 mx-1 space-y-1">
         <a
           href="/biotech/briefs/new"
           className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
@@ -88,7 +88,7 @@ export default function BiotechNav() {
           </svg>
           New Brief
         </a>
-        <ThemeToggle className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors" />
+        <ThemeToggle className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors" />
       </div>
     </nav>
   );
@@ -96,9 +96,9 @@ export default function BiotechNav() {
   return (
     <>
       {/* ── Desktop sidebar ── */}
-      <aside className="hidden lg:flex flex-col w-52 shrink-0 border-r border-gray-800 bg-gray-950 min-h-screen sticky top-0">
+      <aside className="hidden lg:flex flex-col w-52 shrink-0 border-r border-gray-100 bg-white min-h-screen sticky top-0">
         {/* Logo */}
-        <div className="px-4 py-5 border-b border-gray-800">
+        <div className="px-4 py-5 border-b border-gray-100">
           <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500">BiotechOS</p>
           <p className="text-xs text-gray-600 mt-0.5">CRO Engagement Pipeline</p>
         </div>
@@ -108,13 +108,13 @@ export default function BiotechNav() {
       </aside>
 
       {/* ── Mobile top bar ── */}
-      <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950 sticky top-0 z-30">
+      <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-30">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500">BiotechOS</p>
         </div>
         <button
           onClick={() => setMobileOpen(v => !v)}
-          className="text-gray-400 hover:text-gray-200 transition-colors p-1"
+          className="text-gray-600 hover:text-gray-900 transition-colors p-1"
           aria-label="Toggle menu"
         >
           {mobileOpen ? (
@@ -133,7 +133,7 @@ export default function BiotechNav() {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-20 bg-black/60" onClick={() => setMobileOpen(false)}>
           <div
-            className="absolute top-[52px] left-0 right-0 bg-gray-950 border-b border-gray-800 shadow-xl"
+            className="absolute top-[52px] left-0 right-0 bg-white border-b border-gray-100 shadow-xl"
             onClick={e => e.stopPropagation()}
           >
             {navLinks}
