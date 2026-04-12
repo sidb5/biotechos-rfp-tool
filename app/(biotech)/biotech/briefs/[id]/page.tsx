@@ -205,7 +205,8 @@ export default function BriefPage() {
           .select(`id, name, city, state, country, region, biosecure_compliant, specialties,
                    size_category, glp_certified, contact_email, contact_form_url, bd_key_contact,
                    services_summary, employee_count, ${serviceColumns}`)
-          .order('name'),
+          .order('name')
+          .range(0, 1999),
         supabase
           .from('cro_engagements')
           .select('cro_email, stage')
@@ -534,25 +535,42 @@ export default function BriefPage() {
                 </div>
               )}
 
-              {/* Row 3: US State filter */}
+              {/* Row 3: US State filter — multi-select chips */}
               {availableStates.length > 0 && (biosecureOnly || regions.includes('US')) && (
-                <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-gray-100">
-                  <span className="text-xs text-gray-500 shrink-0">State:</span>
-                  <select
-                    value={stateFilter}
-                    onChange={e => setStateFilter(e.target.value)}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="any">All states</option>
-                    {availableStates.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  {stateFilter !== 'any' && (
-                    <button onClick={() => setStateFilter('any')} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-                      Clear
+                <div className="pt-3 border-t border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">State:</span>
+                    {stateFilter !== 'any' && (
+                      <button onClick={() => setStateFilter('any')} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => setStateFilter('any')}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        stateFilter === 'any'
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                      }`}
+                    >
+                      All
                     </button>
-                  )}
+                    {availableStates.map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setStateFilter(prev => prev === s ? 'any' : s)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          stateFilter === s
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
