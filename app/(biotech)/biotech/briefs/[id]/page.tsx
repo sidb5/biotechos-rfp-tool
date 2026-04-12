@@ -103,7 +103,7 @@ interface ManualEntry {
   email: string;
 }
 
-type SizeFilter = 'any' | 'small' | 'mid' | 'large';
+type SizeFilter = 'any' | 'Small' | 'Medium' | 'Large';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -170,6 +170,7 @@ export default function BriefPage() {
   const [glpOnly, setGlpOnly]                 = useState(false);
   const [regions, setRegions]                 = useState<string[]>(['US', 'EU', 'UK']);
   const [sizeFilter, setSizeFilter]           = useState<SizeFilter>('any');
+  const [stateFilter, setStateFilter]         = useState<string>('any');
   const [serviceFilters, setServiceFilters]   = useState<Set<ServiceKey>>(new Set());
   const [showServiceFilters, setShowServiceFilters] = useState(false);
 
@@ -238,6 +239,7 @@ export default function BriefPage() {
         if (!biosecureOnly && regions.length > 0 && cro.region && !regions.includes(cro.region)) return false;
         if (glpOnly && !cro.glp_certified) return false;
         if (sizeFilter !== 'any' && cro.size_category !== sizeFilter) return false;
+        if (stateFilter !== 'any' && cro.state !== stateFilter) return false;
         if (serviceFilters.size > 0) {
           const croRec = cro as unknown as Record<string, unknown>;
           const hasAll = Array.from(serviceFilters).every(svc => croRec[svc]);
@@ -255,7 +257,15 @@ export default function BriefPage() {
       filteredWithEmail: scored.filter(c => c.contact_email),
       filteredNoEmail:   scored.filter(c => !c.contact_email),
     };
-  }, [allCROs, biosecureOnly, glpOnly, regions, sizeFilter, serviceFilters, brief]);
+  }, [allCROs, biosecureOnly, glpOnly, regions, sizeFilter, stateFilter, serviceFilters, brief]);
+
+  // Unique US states from filtered results (for state dropdown)
+  const availableStates = useMemo(() => {
+    const states = allCROs
+      .filter(c => c.region === 'US' && c.state)
+      .map(c => c.state as string);
+    return Array.from(new Set(states)).sort();
+  }, [allCROs]);
 
   const allFiltered = [...filteredWithEmail, ...filteredNoEmail];
 
@@ -318,16 +328,21 @@ export default function BriefPage() {
   const selectedNoEmail    = filteredNoEmail.filter(c => selectedIds.has(c.id));
   // No-email CROs only count toward total if they have an email override
   const selectedNoEmailWithOverride = selectedNoEmail.filter(c => emailOverrides[c.id]?.trim());
-  const totalSelected = selectedWithEmail.length + selectedNoEmailWithOverride.length + manualEntries.length;
+  const selectedNoEmailWithForm = selectedNoEmail.filter(c => !emailOverrides[c.id]?.trim() && c.contact_form_url);
+  const totalSelected = selectedWithEmail.length + selectedNoEmailWithOverride.length + selectedNoEmailWithForm.length + manualEntries.length;
   const noEmailSelectedCount = selectedNoEmail.length - selectedNoEmailWithOverride.length;
 
   function handleProceed() {
     if (totalSelected === 0) return;
 
     const croList = [
-      ...selectedWithEmail.map(c => ({ id: c.id, name: c.name, email: c.contact_email })),
+      ...selectedWithEmail.map(c => ({ id: c.id, name: c.name, email: c.contact_email, contact_form_url: c.contact_form_url ?? null })),
       ...selectedNoEmailWithOverride.map(c => ({
-        id: c.id, name: c.name, email: emailOverrides[c.id].trim(),
+        id: c.id, name: c.name, email: emailOverrides[c.id].trim(), contact_form_url: c.contact_form_url ?? null,
+      })),
+      // No-email CROs without an override — include for contact form tab
+      ...selectedNoEmail.filter(c => !emailOverrides[c.id]?.trim()).map(c => ({
+        id: c.id, name: c.name, email: null, contact_form_url: c.contact_form_url ?? null,
       })),
     ];
 
@@ -485,17 +500,17 @@ export default function BriefPage() {
 
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">Size:</span>
-                  {(['any', 'small', 'mid', 'large'] as SizeFilter[]).map(s => (
+                  {(['any', 'Small', 'Medium', 'Large'] as SizeFilter[]).map(s => (
                     <button
                       key={s}
                       onClick={() => setSizeFilter(s)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors capitalize ${
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                         sizeFilter === s
                           ? 'bg-blue-600 border-blue-500 text-white'
                           : 'border-gray-200 text-gray-500 hover:border-gray-400'
                       }`}
                     >
-                      {s}
+                      {s === 'any' ? 'Any' : s}
                     </button>
                   ))}
                 </div>
@@ -516,6 +531,28 @@ export default function BriefPage() {
                       <span className="text-sm text-gray-700">{r}</span>
                     </label>
                   ))}
+                </div>
+              )}
+
+              {/* Row 3: US State filter */}
+              {availableStates.length > 0 && (biosecureOnly || regions.includes('US')) && (
+                <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-gray-100">
+                  <span className="text-xs text-gray-500 shrink-0">State:</span>
+                  <select
+                    value={stateFilter}
+                    onChange={e => setStateFilter(e.target.value)}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="any">All states</option>
+                    {availableStates.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  {stateFilter !== 'any' && (
+                    <button onClick={() => setStateFilter('any')} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                      Clear
+                    </button>
+                  )}
                 </div>
               )}
 

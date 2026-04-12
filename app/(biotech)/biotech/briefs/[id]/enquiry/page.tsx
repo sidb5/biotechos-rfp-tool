@@ -15,11 +15,13 @@ interface CROItem {
   id: string;
   name: string;
   email: string | null;
+  contact_form_url?: string | null;
   isManual: boolean;
 }
 
-type DraftStatus = 'generating' | 'ready' | 'sending' | 'sent' | 'error';
-type BulkStatus  = 'idle' | 'generating' | 'ready' | 'sending';
+type SendTab     = 'bulk' | 'individual' | 'contactform';
+type DraftStatus = 'ready' | 'sending' | 'sent' | 'error';
+type TemplateStatus = 'idle' | 'generating' | 'ready';
 
 interface DraftState {
   subject:       string;
@@ -36,13 +38,12 @@ interface BriefMeta {
 }
 
 interface UserSettings {
-  sender_display_name: string | null;
-  sender_email:        string | null;
-  company_name:        string | null;
+  sender_display_name:    string | null;
+  sender_email:           string | null;
+  company_name:           string | null;
   response_deadline_days: number | null;
 }
 
-// Saved draft shape returned by GET /api/biotech/briefs/[id]/enquiry
 interface SavedDraft {
   cro_email:     string;
   cro_name:      string;
@@ -54,114 +55,76 @@ interface SavedDraft {
   stage:         string;
 }
 
-// ── Generation helper ─────────────────────────────────────────────────────────
-
-async function generateDraft(
-  briefId: string,
-  cro: CROItem,
-  opts: { includeBudget: boolean; deadlineDays: number; companyName: string | null }
-): Promise<
-  | { subject: string; body: string; engagement_id: string; message_id: string }
-  | { error: string }
-> {
-  try {
-    const res = await fetch(`/api/biotech/briefs/${briefId}/enquiry`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        cro_id:         cro.isManual ? null : cro.id,
-        cro_name:       cro.name,
-        cro_email:      cro.email,
-        include_budget: opts.includeBudget,
-        deadline_days:  opts.deadlineDays,
-        sender_company: opts.companyName,
-      }),
-    });
-    const json = await res.json();
-    if (!res.ok) return { error: (json.error as string) ?? 'Generation failed' };
-    return {
-      subject:       json.subject       as string,
-      body:          json.body          as string,
-      engagement_id: json.engagement_id as string,
-      message_id:    json.message_id    as string,
-    };
-  } catch {
-    return { error: 'Network error — check your connection' };
-  }
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function EnquiryPage() {
   const params  = useParams();
   const briefId = params.id as string;
 
-  const [cros, setCros]               = useState<CROItem[]>([]);
-  const [brief, setBrief]             = useState<BriefMeta | null>(null);
+  const [cros, setCros]                 = useState<CROItem[]>([]);
+  const [brief, setBrief]               = useState<BriefMeta | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
-  const [authEmail, setAuthEmail]     = useState<string>('');
-  const [dataLoaded, setDataLoaded]   = useState(false);
-  const [noSelection, setNoSelection] = useState(false);
+  const [authEmail, setAuthEmail]       = useState<string>('');
+  const [dataLoaded, setDataLoaded]     = useState(false);
+  const [noSelection, setNoSelection]   = useState(false);
 
-  // Individual mode draft state
+  // ── Shared template (ONE AI call feeds all tabs) ───────────────────────────
+  const [templateSubject, setTemplateSubject] = useState('');
+  const [templateBody, setTemplateBody]       = useState('');
+  const [templateStatus, setTemplateStatus]   = useState<TemplateStatus>('idle');
+  const [templateError, setTemplateError]     = useState('');
+
+  // ── Options ────────────────────────────────────────────────────────────────
+  const [includeBudget, setIncludeBudget] = useState(false);
+  const [deadlineDays, setDeadlineDays]   = useState(10);
+
+  // ── Tab ────────────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<SendTab>('bulk');
+
+  // ── Bulk send state ────────────────────────────────────────────────────────
+  const [bulkProgress, setBulkProgress] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'error'>>({});
+  const [bulkSending, setBulkSending]   = useState(false);
+
+  // ── Individual draft state ────────────────────────────────────────────────
   const [drafts, setDrafts]           = useState<Record<string, DraftState>>({});
   const [activeCroId, setActiveCroId] = useState<string | null>(null);
 
-  const [includeBudget, setIncludeBudget] = useState(false);
-  const [deadlineDays, setDeadlineDays]   = useState(10);
-  const [optionsDirty, setOptionsDirty]   = useState(false);
-
-  // Send mode: 'bulk' = one template for all CROs (default); 'individual' = custom per CRO
-  const [sendMode, setSendMode] = useState<'bulk' | 'individual'>('bulk');
-
-  // Bulk send state
-  const [bulkSubject, setBulkSubject]   = useState('');
-  const [bulkBody, setBulkBody]         = useState('');
-  const [bulkStatus, setBulkStatus]     = useState<BulkStatus>('idle');
-  const [bulkError, setBulkError]       = useState('');
-  const [bulkProgress, setBulkProgress] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'error'>>({});
+  // ── Contact form copy state ───────────────────────────────────────────────
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const initialised = useRef(false);
 
-  // ── Load: session storage + brief + settings + saved drafts ──────────────
+  // ── Load ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function load() {
-      // 1. Session storage
       const raw = sessionStorage.getItem(`brief_${briefId}_selection`);
       if (!raw) { setNoSelection(true); setDataLoaded(true); return; }
 
       let sel: {
-        cros:   Array<{ id: string; name: string; email: string | null }>;
+        cros:   Array<{ id: string; name: string; email: string | null; contact_form_url?: string | null }>;
         manual: Array<{ id: string; name: string; email: string }>;
       };
       try { sel = JSON.parse(raw); }
       catch { setNoSelection(true); setDataLoaded(true); return; }
 
       const combined: CROItem[] = [
-        ...sel.cros.map(c => ({ id: c.id, name: c.name, email: c.email, isManual: false })),
-        ...sel.manual.map(m => ({ id: m.id, name: m.name, email: m.email, isManual: true })),
+        ...sel.cros.map(c => ({ id: c.id, name: c.name, email: c.email, contact_form_url: c.contact_form_url ?? null, isManual: false })),
+        ...sel.manual.map(m => ({ id: m.id, name: m.name, email: m.email, contact_form_url: null, isManual: true })),
       ];
       if (combined.length === 0) { setNoSelection(true); setDataLoaded(true); return; }
 
       setCros(combined);
-      setActiveCroId(combined[0].id);
+      setActiveCroId(combined.find(c => c.email)?.id ?? combined[0].id);
 
-      // 2. Auth + brief + settings in parallel
       const [briefRes, userRes] = await Promise.all([
-        supabase
-          .from('rfp_internal_briefs')
-          .select('title, extracted_data')
-          .eq('id', briefId)
-          .single(),
+        supabase.from('rfp_internal_briefs').select('title, extracted_data').eq('id', briefId).single(),
         supabase.auth.getUser(),
       ]);
 
       if (briefRes.data) setBrief(briefRes.data as BriefMeta);
 
       let settings: UserSettings | null = null;
-      let effectiveDeadline = 10;
-
       if (userRes.data.user) {
         setAuthEmail(userRes.data.user.email ?? '');
         try {
@@ -172,16 +135,13 @@ export default function EnquiryPage() {
             .maybeSingle();
           if (data) {
             settings = data as UserSettings;
-            if (settings.response_deadline_days) {
-              effectiveDeadline = settings.response_deadline_days;
-              setDeadlineDays(settings.response_deadline_days);
-            }
+            if (settings.response_deadline_days) setDeadlineDays(settings.response_deadline_days);
           }
-        } catch { /* table not yet created */ }
+        } catch { /* ignore */ }
       }
       if (settings) setUserSettings(settings);
 
-      // 3. Fetch saved drafts from DB — keyed by email|name to avoid same-email collision
+      // Load saved drafts
       let savedDrafts: SavedDraft[] = [];
       try {
         const res = await fetch(`/api/biotech/briefs/${briefId}/enquiry`);
@@ -191,23 +151,17 @@ export default function EnquiryPage() {
         }
       } catch { /* ignore */ }
 
-      // Key: `${email}|${name}` — two companies sharing an email stay separate
       const savedByKey: Record<string, SavedDraft> = {};
-      for (const d of savedDrafts) {
-        const k = `${d.cro_email}|${d.cro_name}`;
-        savedByKey[k] = d;
-      }
+      for (const d of savedDrafts) savedByKey[`${d.cro_email}|${d.cro_name}`] = d;
 
       setDataLoaded(true);
-
       if (initialised.current) return;
       initialised.current = true;
 
-      // 4. Populate initial draft state from saved DB records
+      // Restore saved drafts into individual draft state
       const initial: Record<string, DraftState> = {};
       for (const cro of combined) {
-        const key   = `${cro.email}|${cro.name}`;
-        const saved = cro.email ? savedByKey[key] : undefined;
+        const saved = cro.email ? savedByKey[`${cro.email}|${cro.name}`] : undefined;
         if (saved) {
           initial[cro.id] = {
             subject:      saved.subject,
@@ -216,293 +170,195 @@ export default function EnquiryPage() {
             engagementId: saved.engagement_id,
             messageId:    saved.message_id,
           };
-        } else {
-          // Placeholder — generation deferred until individual mode is activated
-          initial[cro.id] = { subject: '', body: '', status: 'generating' };
         }
       }
       setDrafts(initial);
-
-      // Auto-activate first CRO that still needs action
-      const firstActionable = combined.find(c => {
-        const key   = `${c.email}|${c.name}`;
-        const saved = c.email ? savedByKey[key] : undefined;
-        return !saved || saved.status !== 'sent';
-      });
-      if (firstActionable) setActiveCroId(firstActionable.id);
-
-      // 5. Auto-generate — ONLY in individual mode (default is 'bulk' so this is skipped on mount)
-      //    sendMode is captured from closure; on initial mount it is 'bulk' → no generation.
-      const needGeneration = combined.filter(c => !c.email || !savedByKey[`${c.email}|${c.name}`]);
-      if (needGeneration.length === 0) return;
-
-      // sendMode is read from the closure at effect invocation time.
-      // On first mount sendMode === 'bulk', so we skip auto-generation.
-      // When the user switches to individual, handleSwitchToIndividual triggers generation instead.
     }
-
     void load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [briefId]);
 
-  // ── Switch to individual mode — triggers generation for CROs without drafts ─
+  // ── Generate template (single AI call) ────────────────────────────────────
 
-  async function handleSwitchToIndividual() {
-    setSendMode('individual');
-    const opts = {
-      includeBudget,
-      deadlineDays,
-      companyName: userSettings?.company_name ?? null,
-    };
-    // Generate only for CROs that don't have a saved draft yet
-    const pending = cros.filter(c => {
-      const d = drafts[c.id];
-      return !d || d.status === 'generating';
-    });
-    if (pending.length === 0) return;
-
-    await Promise.all(
-      pending.map(async cro => {
-        const result = await generateDraft(briefId, cro, opts);
-        setDrafts(prev => ({
-          ...prev,
-          [cro.id]: 'error' in result
-            ? { subject: '', body: '', status: 'error', errorMsg: result.error }
-            : {
-                subject:      result.subject,
-                body:         result.body,
-                status:       'ready',
-                engagementId: result.engagement_id,
-                messageId:    result.message_id,
-              },
-        }));
-      })
-    );
-  }
-
-  // ── Regenerate all (individual mode) ─────────────────────────────────────
-
-  async function handleRegenerateAll() {
-    setOptionsDirty(false);
-    const opts = {
-      includeBudget,
-      deadlineDays,
-      companyName: userSettings?.company_name ?? null,
-    };
-
-    setDrafts(prev => {
-      const next = { ...prev };
-      cros.forEach(c => {
-        if (next[c.id]?.status !== 'sent') {
-          next[c.id] = { subject: '', body: '', status: 'generating' };
-        }
-      });
-      return next;
-    });
-
-    await Promise.all(
-      cros
-        .filter(c => drafts[c.id]?.status !== 'sent')
-        .map(async cro => {
-          const result = await generateDraft(briefId, cro, opts);
-          setDrafts(prev => ({
-            ...prev,
-            [cro.id]: 'error' in result
-              ? { subject: '', body: '', status: 'error', errorMsg: result.error }
-              : {
-                  subject:      result.subject,
-                  body:         result.body,
-                  status:       'ready',
-                  engagementId: result.engagement_id,
-                  messageId:    result.message_id,
-                },
-          }));
-        })
-    );
-  }
-
-  async function handleRedraft(cro: CROItem) {
-    setDrafts(prev => ({
-      ...prev,
-      [cro.id]: { subject: '', body: '', status: 'generating' },
-    }));
-    const result = await generateDraft(briefId, cro, {
-      includeBudget,
-      deadlineDays,
-      companyName: userSettings?.company_name ?? null,
-    });
-    setDrafts(prev => ({
-      ...prev,
-      [cro.id]: 'error' in result
-        ? { subject: '', body: '', status: 'error', errorMsg: result.error }
-        : {
-            subject:      result.subject,
-            body:         result.body,
-            status:       'ready',
-            engagementId: result.engagement_id,
-            messageId:    result.message_id,
-          },
-    }));
-  }
-
-  // ── Bulk template generation ──────────────────────────────────────────────
-
-  async function handleGenerateBulkTemplate() {
-    setBulkStatus('generating');
-    setBulkError('');
+  async function handleGenerateTemplate() {
+    setTemplateStatus('generating');
+    setTemplateError('');
     try {
       const res = await fetch(`/api/biotech/briefs/${briefId}/enquiry`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           cro_id:         null,
-          cro_name:       '{{CRO_NAME}}',    // placeholder — substituted on send
+          cro_name:       '{{CRO_NAME}}',
           cro_email:      'template@placeholder.invalid',
           include_budget: includeBudget,
           deadline_days:  deadlineDays,
           sender_company: userSettings?.company_name ?? null,
-          template_only:  true,              // skip DB save
+          template_only:  true,
         }),
       });
       const json = await res.json();
       if (!res.ok) {
-        setBulkError((json.error as string) ?? 'Generation failed — please retry');
-        setBulkStatus('idle');
+        setTemplateError((json.error as string) ?? 'Generation failed — please retry');
+        setTemplateStatus('idle');
         return;
       }
-      setBulkSubject(json.subject as string);
-      setBulkBody(json.body as string);
-      setBulkStatus('ready');
+      const subject = json.subject as string;
+      const body    = json.body    as string;
+      setTemplateSubject(subject);
+      setTemplateBody(body);
+      setTemplateStatus('ready');
+
+      // Pre-fill individual drafts (only for CROs not already saved/sent)
+      setDrafts(prev => {
+        const next = { ...prev };
+        for (const cro of cros) {
+          if (!cro.email) continue;
+          if (next[cro.id]?.status === 'sent') continue;
+          next[cro.id] = {
+            subject: subject,
+            body:    body.replace(/\{\{CRO_NAME\}\}/g, cro.name),
+            status:  'ready',
+          };
+        }
+        return next;
+      });
     } catch {
-      setBulkError('Network error — please check your connection');
-      setBulkStatus('idle');
+      setTemplateError('Network error — please check your connection');
+      setTemplateStatus('idle');
     }
   }
 
-  // ── Bulk send all ─────────────────────────────────────────────────────────
+  // ── Individual: save + send ───────────────────────────────────────────────
 
-  async function handleSendBulk() {
-    if (!bulkBody.trim() || !bulkSubject.trim()) return;
-    setBulkStatus('sending');
-
-    const targets = cros.filter(c => c.email && bulkProgress[c.id] !== 'sent');
-
-    await Promise.all(
-      targets.map(async cro => {
-        setBulkProgress(prev => ({ ...prev, [cro.id]: 'sending' }));
-        try {
-          // Substitute {{CRO_NAME}} with the actual CRO name
-          const personalizedBody = bulkBody.replace(/\{\{CRO_NAME\}\}/g, cro.name);
-
-          // 1. Create engagement + message (skip AI — use our template body)
-          const engRes = await fetch(`/api/biotech/briefs/${briefId}/enquiry`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-              cro_id:           cro.isManual ? null : cro.id,
-              cro_name:         cro.name,
-              cro_email:        cro.email,
-              sender_company:   userSettings?.company_name ?? null,
-              override_body:    personalizedBody,
-              override_subject: bulkSubject,
-            }),
-          });
-          const engJson = await engRes.json();
-          if (!engRes.ok) throw new Error((engJson.error as string) ?? 'Failed to save engagement');
-
-          // 2. Send via Resend
-          const sendRes = await fetch(`/api/biotech/briefs/${briefId}/engagements`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-              engagement_id: engJson.engagement_id as string,
-              message_id:    engJson.message_id    as string,
-              cro_email:     cro.email,
-              subject:       bulkSubject,
-              body:          personalizedBody,
-            }),
-          });
-          const sendJson = await sendRes.json();
-          if (!sendRes.ok) throw new Error((sendJson.error as string) ?? 'Send failed');
-
-          setBulkProgress(prev => ({ ...prev, [cro.id]: 'sent' }));
-        } catch (err) {
-          console.error('[bulk-send]', cro.name, err);
-          setBulkProgress(prev => ({ ...prev, [cro.id]: 'error' }));
-        }
-      })
-    );
-
-    setBulkStatus('ready');
-  }
-
-  // ── Individual send ───────────────────────────────────────────────────────
-
-  async function handleSend(cro: CROItem) {
+  async function handleIndividualSend(cro: CROItem) {
     const draft = drafts[cro.id];
     if (!draft || draft.status !== 'ready' || !cro.email) return;
-    if (!draft.engagementId || !draft.messageId) return;
 
     setDrafts(prev => ({ ...prev, [cro.id]: { ...prev[cro.id], status: 'sending' } }));
 
     try {
-      const res = await fetch(`/api/biotech/briefs/${briefId}/engagements`, {
+      // If no engagementId yet, save via override first
+      let engId   = draft.engagementId;
+      let msgId   = draft.messageId;
+
+      if (!engId || !msgId) {
+        const engRes = await fetch(`/api/biotech/briefs/${briefId}/enquiry`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            cro_id:           cro.isManual ? null : cro.id,
+            cro_name:         cro.name,
+            cro_email:        cro.email,
+            sender_company:   userSettings?.company_name ?? null,
+            override_subject: draft.subject,
+            override_body:    draft.body,
+          }),
+        });
+        const engJson = await engRes.json();
+        if (!engRes.ok) throw new Error((engJson.error as string) ?? 'Failed to save');
+        engId = engJson.engagement_id as string;
+        msgId = engJson.message_id    as string;
+      }
+
+      const sendRes = await fetch(`/api/biotech/briefs/${briefId}/engagements`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          engagement_id: draft.engagementId,
-          message_id:    draft.messageId,
+          engagement_id: engId,
+          message_id:    msgId,
           cro_email:     cro.email,
           subject:       draft.subject,
           body:          draft.body,
         }),
       });
-      const json = await res.json();
-
-      if (!res.ok) {
-        setDrafts(prev => ({
-          ...prev,
-          [cro.id]: {
-            ...prev[cro.id],
-            status:   'error',
-            errorMsg: (json.error as string) ?? 'Send failed — please retry',
-          },
-        }));
-        return;
-      }
+      const sendJson = await sendRes.json();
+      if (!sendRes.ok) throw new Error((sendJson.error as string) ?? 'Send failed');
 
       setDrafts(prev => ({
         ...prev,
-        [cro.id]: {
-          ...prev[cro.id],
-          status:   'sent',
-          errorMsg: json.warning as string | undefined,
-        },
+        [cro.id]: { ...prev[cro.id], status: 'sent', engagementId: engId, messageId: msgId },
       }));
-    } catch {
+    } catch (err) {
       setDrafts(prev => ({
         ...prev,
-        [cro.id]: { ...prev[cro.id], status: 'error', errorMsg: 'Network error — please retry' },
+        [cro.id]: { ...prev[cro.id], status: 'error', errorMsg: String(err) },
       }));
     }
   }
 
   async function handleSendAll() {
-    const pending = cros.filter(c => drafts[c.id]?.status === 'ready' && c.email);
-    for (const cro of pending) await handleSend(cro);
+    const pending = cros.filter(c => c.email && drafts[c.id]?.status === 'ready');
+    for (const cro of pending) await handleIndividualSend(cro);
+  }
+
+  // ── Bulk send ─────────────────────────────────────────────────────────────
+
+  async function handleSendBulk() {
+    if (!templateBody.trim() || !templateSubject.trim()) return;
+    setBulkSending(true);
+
+    const targets = crosWithEmail.filter(c => bulkProgress[c.id] !== 'sent');
+    await Promise.all(targets.map(async cro => {
+      setBulkProgress(prev => ({ ...prev, [cro.id]: 'sending' }));
+      try {
+        const personalizedBody = templateBody.replace(/\{\{CRO_NAME\}\}/g, cro.name);
+        const engRes = await fetch(`/api/biotech/briefs/${briefId}/enquiry`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            cro_id:           cro.isManual ? null : cro.id,
+            cro_name:         cro.name,
+            cro_email:        cro.email,
+            sender_company:   userSettings?.company_name ?? null,
+            override_body:    personalizedBody,
+            override_subject: templateSubject,
+          }),
+        });
+        const engJson = await engRes.json();
+        if (!engRes.ok) throw new Error((engJson.error as string) ?? 'Failed');
+
+        const sendRes = await fetch(`/api/biotech/briefs/${briefId}/engagements`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            engagement_id: engJson.engagement_id,
+            message_id:    engJson.message_id,
+            cro_email:     cro.email,
+            subject:       templateSubject,
+            body:          personalizedBody,
+          }),
+        });
+        const sendJson = await sendRes.json();
+        if (!sendRes.ok) throw new Error((sendJson.error as string) ?? 'Send failed');
+
+        setBulkProgress(prev => ({ ...prev, [cro.id]: 'sent' }));
+      } catch (err) {
+        console.error('[bulk-send]', cro.name, err);
+        setBulkProgress(prev => ({ ...prev, [cro.id]: 'error' }));
+      }
+    }));
+
+    setBulkSending(false);
+  }
+
+  // ── Copy to clipboard ─────────────────────────────────────────────────────
+
+  async function handleCopy(id: string, text: string) {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const activeCro   = cros.find(c => c.id === activeCroId) ?? null;
-  const activeDraft = activeCroId ? (drafts[activeCroId] ?? null) : null;
-  const sentCount  = Object.values(drafts).filter(d => d.status === 'sent').length;
-  const readyCount = cros.filter(c => drafts[c.id]?.status === 'ready' && c.email).length;
-  const allSent    = cros.length > 0 && sentCount === cros.length;
+  const crosWithEmail = useMemo(() => cros.filter(c => c.email), [cros]);
+  const crosNoEmail   = useMemo(() => cros.filter(c => !c.email), [cros]);
+  const crosWithForm  = useMemo(() => crosNoEmail.filter(c => c.contact_form_url), [crosNoEmail]);
 
   const bulkSentCount  = Object.values(bulkProgress).filter(v => v === 'sent').length;
-  const bulkErrorCount = Object.values(bulkProgress).filter(v => v === 'error').length;
-  const allBulkSent    = cros.length > 0 && bulkSentCount === cros.length;
+  const indivSentCount = Object.values(drafts).filter(d => d.status === 'sent').length;
+  const totalSent      = activeTab === 'bulk' ? bulkSentCount : indivSentCount;
 
   const effectiveReplyTo       = userSettings?.sender_email || authEmail;
   const usingAuthEmailFallback = !userSettings?.sender_email && !!authEmail;
@@ -519,7 +375,7 @@ export default function EnquiryPage() {
       .map(key => SAFE_FIELD_LABELS[key]);
   }, [brief, includeBudget]);
 
-  // ── Spinner ───────────────────────────────────────────────────────────────
+  // ── Loading / no-selection ────────────────────────────────────────────────
 
   if (!dataLoaded) {
     return (
@@ -549,7 +405,7 @@ export default function EnquiryPage() {
     <div className="min-h-screen bg-gray-50 text-gray-900">
 
       {/* PRIVATE banner */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2.5 backdrop-blur">
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2.5">
         <span className="shrink-0 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700">
           PRIVATE
         </span>
@@ -576,16 +432,13 @@ export default function EnquiryPage() {
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">Capability enquiry drafts</h1>
               <p className="mt-1 text-sm text-gray-500">
-                AI-drafted IP-safe outreach for {cros.length} CRO{cros.length !== 1 ? 's' : ''}.
-                Drafts are saved automatically — edits persist across sessions.
+                {cros.length} CRO{cros.length !== 1 ? 's' : ''} selected
+                {crosWithEmail.length !== cros.length && ` · ${crosWithEmail.length} with email · ${crosWithForm.length} with contact form`}
               </p>
             </div>
-            {(sentCount > 0 || bulkSentCount > 0) && (
+            {totalSent > 0 && (
               <span className="text-sm text-gray-500 shrink-0">
-                <span className="text-green-600 font-semibold">
-                  {sendMode === 'bulk' ? bulkSentCount : sentCount}
-                </span>
-                {' '}/ {cros.length} sent
+                <span className="text-green-600 font-semibold">{totalSent}</span> / {crosWithEmail.length} sent
               </span>
             )}
           </div>
@@ -600,94 +453,79 @@ export default function EnquiryPage() {
           <div className="h-px flex-1 bg-gray-200" />
         </div>
 
-        {/* ── Send mode toggle ── */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 shrink-0">Send mode:</span>
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-            <button
-              onClick={() => setSendMode('bulk')}
-              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
-                sendMode === 'bulk'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-              }`}
-            >
-              Bulk (same template)
-            </button>
-            <button
-              onClick={handleSwitchToIndividual}
-              className={`px-4 py-1.5 text-xs font-medium transition-colors border-l border-gray-200 ${
-                sendMode === 'individual'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-              }`}
-            >
-              Individual (custom per CRO)
-            </button>
-          </div>
-          {sendMode === 'bulk' && (
-            <p className="text-xs text-gray-500">
-              One template with <code className="text-amber-600">{'{{CRO_NAME}}'}</code> — substituted on send
-            </p>
-          )}
-        </div>
-
-        {/* Two-column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 items-start">
-
-          {/* ── Left panel ── */}
-          <aside className="space-y-4">
-
-            {/* Draft options */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-500">Draft options</h2>
-
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-gray-700">Include budget range</span>
+        {/* ── Generate template — single AI call ── */}
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Generate outreach template</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                One AI call generates an IP-safe template with <code className="text-amber-600 font-mono">{'{{CRO_NAME}}'}</code> — used across all send modes below.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Options inline */}
+              <label className="flex items-center gap-2 text-xs text-gray-600">
                 <button
                   role="switch"
                   aria-checked={includeBudget}
-                  onClick={() => { setIncludeBudget(v => !v); setOptionsDirty(true); }}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white ${includeBudget ? 'bg-blue-600' : 'bg-gray-300'}`}
+                  onClick={() => setIncludeBudget(v => !v)}
+                  className={`relative inline-flex h-4 w-8 shrink-0 rounded-full border-2 border-transparent transition-colors ${includeBudget ? 'bg-blue-600' : 'bg-gray-300'}`}
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${includeBudget ? 'translate-x-4' : 'translate-x-0'}`} />
+                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${includeBudget ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="deadline-sel" className="text-sm text-gray-700">Response deadline</label>
-                <select
-                  id="deadline-sel"
-                  value={deadlineDays}
-                  onChange={e => { setDeadlineDays(Number(e.target.value)); setOptionsDirty(true); }}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {[5, 7, 10, 14, 20].map(d => <option key={d} value={d}>{d} days</option>)}
-                </select>
-              </div>
-
-              {optionsDirty && sendMode === 'individual' && (
-                <button
-                  onClick={handleRegenerateAll}
-                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
-                >
-                  ↺ Regenerate all with new options
-                </button>
-              )}
-              {optionsDirty && sendMode === 'bulk' && bulkStatus === 'ready' && (
-                <button
-                  onClick={handleGenerateBulkTemplate}
-                  className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
-                >
-                  ↺ Regenerate template with new options
-                </button>
-              )}
+                Include budget
+              </label>
+              <select
+                value={deadlineDays}
+                onChange={e => setDeadlineDays(Number(e.target.value))}
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {[5, 7, 10, 14, 20].map(d => <option key={d} value={d}>{d} day deadline</option>)}
+              </select>
+              <button
+                onClick={handleGenerateTemplate}
+                disabled={templateStatus === 'generating'}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {templateStatus === 'generating'
+                  ? <span className="flex items-center gap-2"><svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Generating…</span>
+                  : templateStatus === 'ready' ? '↺ Regenerate template' : '✦ Generate template'
+                }
+              </button>
             </div>
+          </div>
+          {templateError && <p className="mt-2 text-xs text-red-600">{templateError}</p>}
+          {templateStatus === 'ready' && (
+            <div className="mt-4 space-y-2">
+              <input
+                type="text"
+                value={templateSubject}
+                onChange={e => setTemplateSubject(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Subject"
+              />
+              <textarea
+                rows={8}
+                value={templateBody}
+                onChange={e => setTemplateBody(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none font-mono"
+              />
+              <p className="text-xs text-gray-400">
+                Edit freely — <code className="text-amber-600">{'{{CRO_NAME}}'}</code> is substituted with each CRO's name on send.
+              </p>
+            </div>
+          )}
+        </div>
 
-            {/* IP protection checklist */}
+        {/* ── Tabs + content ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6 items-start">
+
+          {/* Left panel */}
+          <aside className="space-y-4">
+
+            {/* IP protection */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-500">IP protection</h2>
-
               {includedFieldLabels.length > 0 && (
                 <div>
                   <p className="text-[11px] font-semibold text-green-600 mb-2">✓ INCLUDED from brief</p>
@@ -700,54 +538,48 @@ export default function EnquiryPage() {
                   </ul>
                 </div>
               )}
-
               <div>
-                <p className="text-[11px] font-semibold text-red-400 mb-2">✗ NEVER INCLUDED</p>
+                <p className="text-[11px] font-semibold text-red-500 mb-2">✗ NEVER INCLUDED</p>
                 <ul className="space-y-1.5">
                   {ALWAYS_EXCLUDED_LABELS.map(item => (
                     <li key={item.label} className="flex items-start gap-2 text-xs text-gray-500">
-                      <span className="mt-0.5 shrink-0 text-red-700">✗</span>{item.label}
+                      <span className="mt-0.5 shrink-0 text-red-600">✗</span>{item.label}
                     </li>
                   ))}
                 </ul>
               </div>
             </div>
 
-            {/* Reply-To info */}
+            {/* Reply-To */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
               <p className="text-xs font-semibold text-gray-500">Reply-To address</p>
-              <p className="text-xs text-gray-700 break-all font-mono">
-                {effectiveReplyTo || '—'}
-              </p>
+              <p className="text-xs text-gray-700 break-all font-mono">{effectiveReplyTo || '—'}</p>
               <p className="text-xs text-gray-500">
                 {usingAuthEmailFallback ? 'Using your login email. ' : ''}
                 CRO replies go directly to this inbox.{' '}
-                <a href="/biotech/settings" className="text-blue-500 hover:text-blue-400 transition-colors">
+                <a href="/biotech/settings" className="text-blue-500 hover:text-blue-600 transition-colors">
                   Change in settings →
                 </a>
               </p>
             </div>
 
-            {/* Bulk: CRO send status list */}
-            {sendMode === 'bulk' && bulkStatus !== 'idle' && cros.length > 0 && (
+            {/* Bulk send status */}
+            {activeTab === 'bulk' && Object.keys(bulkProgress).length > 0 && (
               <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">
-                  Send status
-                </p>
-                {cros.map(cro => {
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Send status</p>
+                {crosWithEmail.map(cro => {
                   const prog = bulkProgress[cro.id] ?? 'idle';
-                  const icon =
-                    prog === 'sent'    ? <span className="text-green-600">✓</span> :
-                    prog === 'error'   ? <span className="text-red-600">✗</span> :
-                    prog === 'sending' ? <svg className="h-3 w-3 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> :
-                    <span className="text-gray-500">–</span>;
                   return (
                     <div key={cro.id} className="flex items-center gap-2 text-xs">
-                      <span className="shrink-0">{icon}</span>
-                      <span className={`truncate ${prog === 'sent' ? 'text-gray-700' : prog === 'error' ? 'text-red-600' : 'text-gray-500'}`}>
+                      <span className="shrink-0">
+                        {prog === 'sent'    ? <span className="text-green-600">✓</span>
+                       : prog === 'error'   ? <span className="text-red-600">✗</span>
+                       : prog === 'sending' ? <svg className="h-3 w-3 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                       : <span className="text-gray-400">–</span>}
+                      </span>
+                      <span className={`truncate ${prog === 'error' ? 'text-red-600' : prog === 'sent' ? 'text-gray-700' : 'text-gray-500'}`}>
                         {cro.name}
                       </span>
-                      {!cro.email && <span className="text-[10px] text-red-700">no email</span>}
                     </div>
                   );
                 })}
@@ -755,319 +587,234 @@ export default function EnquiryPage() {
             )}
           </aside>
 
-          {/* ── Right panel ── */}
-          <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          {/* Right panel */}
+          <div className="space-y-4">
 
-            {/* ──────────────── BULK MODE ──────────────── */}
-            {sendMode === 'bulk' && (
-              <div className="p-5 space-y-5">
+            {/* Tabs */}
+            <div className="flex rounded-xl border border-gray-200 bg-white overflow-hidden">
+              {([
+                { key: 'bulk',        label: 'Bulk send',      count: crosWithEmail.length },
+                { key: 'individual',  label: 'Individual',     count: crosWithEmail.length },
+                { key: 'contactform', label: 'Contact forms',  count: crosWithForm.length  },
+              ] as { key: SendTab; label: string; count: number }[]).map((tab, i) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex-1 px-4 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                    i > 0 ? 'border-l border-gray-200' : ''
+                  } ${
+                    activeTab === tab.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    activeTab === tab.key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-                {/* Idle state — prompt to generate */}
-                {bulkStatus === 'idle' && (
-                  <div className="flex flex-col items-center gap-4 py-8 text-center">
-                    <div className="text-gray-500 text-4xl">✦</div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">Generate bulk template</p>
-                      <p className="text-xs text-gray-500 mt-1 max-w-sm">
-                        AI will draft one IP-safe email with{' '}
-                        <code className="text-amber-600">{'{{CRO_NAME}}'}</code> as a placeholder.
-                        Each CRO receives a personalised copy on send.
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleGenerateBulkTemplate}
-                      className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      ✦ Generate bulk template →
-                    </button>
-                    {bulkError && (
-                      <p className="text-xs text-red-600">⚠ {bulkError}</p>
-                    )}
+            {/* ── BULK TAB ── */}
+            {activeTab === 'bulk' && (
+              <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+                {templateStatus !== 'ready' ? (
+                  <div className="py-10 text-center text-sm text-gray-500">
+                    Generate a template above to enable bulk send.
                   </div>
-                )}
-
-                {/* Generating spinner */}
-                {bulkStatus === 'generating' && (
-                  <div className="flex items-center gap-2.5 text-xs text-gray-500 py-8 justify-center">
-                    <svg className="h-5 w-5 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Drafting IP-safe bulk template…
-                  </div>
-                )}
-
-                {/* Ready or sending state — show editor */}
-                {(bulkStatus === 'ready' || bulkStatus === 'sending') && (
+                ) : (
                   <>
-                    {/* All-sent banner */}
-                    {allBulkSent && (
-                      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
-                        <span className="text-green-600">✓</span>
-                        <p className="text-xs text-green-700">
-                          All {cros.length} CROs contacted. View in{' '}
-                          <a href="/biotech/engagements" className="underline hover:text-green-800">engagements</a>.
-                        </p>
+                    <p className="text-xs text-gray-500">
+                      Template will be sent to <span className="font-semibold text-gray-700">{crosWithEmail.length} CROs</span> with <code className="text-amber-600">{'{{CRO_NAME}}'}</code> substituted automatically.
+                    </p>
+                    {bulkSentCount === crosWithEmail.length && crosWithEmail.length > 0 ? (
+                      <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                        ✓ All {crosWithEmail.length} enquiries sent successfully.
                       </div>
-                    )}
-
-                    {bulkError && (
-                      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
-                        <p className="text-xs text-red-600">⚠ {bulkError}</p>
-                      </div>
-                    )}
-
-                    {/* Variable hint */}
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                      <p className="text-xs text-amber-600">
-                        <code className="font-mono">{'{{CRO_NAME}}'}</code> will be replaced with each CRO&apos;s name on send.
-                        You can use it anywhere in the subject or body.
-                      </p>
-                    </div>
-
-                    {/* Subject */}
-                    <div>
-                      <p className="mb-1 text-xs text-gray-500">Subject</p>
-                      <input
-                        type="text"
-                        value={bulkSubject}
-                        disabled={bulkStatus === 'sending'}
-                        onChange={e => setBulkSubject(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-                      />
-                    </div>
-
-                    {/* Body */}
-                    <div>
-                      <div className="mb-1 flex items-center justify-between">
-                        <p className="text-xs text-gray-500">Message template</p>
-                        <button
-                          onClick={handleGenerateBulkTemplate}
-                          disabled={bulkStatus === 'sending'}
-                          className="text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40"
-                        >
-                          ↺ Re-draft
-                        </button>
-                      </div>
-                      <textarea
-                        value={bulkBody}
-                        disabled={bulkStatus === 'sending'}
-                        onChange={e => setBulkBody(e.target.value)}
-                        rows={14}
-                        className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-                      />
-                    </div>
-
-                    {/* Send controls */}
-                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
-                      <span className="text-xs text-gray-500">
-                        {bulkBody
-                          ? `${bulkBody.split(/\s+/).filter(Boolean).length} words · sending to ${cros.filter(c => c.email).length} CRO${cros.length !== 1 ? 's' : ''}`
-                          : null}
-                        {bulkErrorCount > 0 && (
-                          <span className="text-red-600"> · {bulkErrorCount} failed</span>
-                        )}
-                      </span>
+                    ) : (
                       <button
                         onClick={handleSendBulk}
-                        disabled={bulkStatus === 'sending' || allBulkSent || !bulkBody.trim()}
-                        className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                        disabled={bulkSending}
+                        className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {bulkStatus === 'sending'
-                          ? `Sending… (${bulkSentCount}/${cros.filter(c => c.email).length})`
-                          : allBulkSent
-                          ? '✓ All sent'
-                          : `Send to all ${cros.filter(c => c.email).length} CROs →`}
+                        {bulkSending
+                          ? <span className="flex items-center justify-center gap-2"><svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Sending…</span>
+                          : `Approve & Send to all ${crosWithEmail.length} CROs →`
+                        }
                       </button>
-                    </div>
+                    )}
+                    {Object.values(bulkProgress).some(v => v === 'error') && (
+                      <p className="text-xs text-red-600">Some sends failed — check the status list on the left and retry.</p>
+                    )}
                   </>
                 )}
               </div>
             )}
 
-            {/* ──────────────── INDIVIDUAL MODE ──────────────── */}
-            {sendMode === 'individual' && (
-              <>
-                {/* Tab bar */}
-                <div className="flex overflow-x-auto border-b border-gray-200 bg-gray-50">
-                  {cros.map(cro => {
-                    const d = drafts[cro.id];
-                    const isActive = cro.id === activeCroId;
-                    const dotClass =
-                      !d                                                  ? 'bg-gray-300' :
-                      d.status === 'sent'                                 ? 'bg-green-500' :
-                      d.status === 'error'                                ? 'bg-red-500' :
-                      d.status === 'generating' || d.status === 'sending' ? 'bg-yellow-500 animate-pulse' :
-                                                                            'bg-blue-400';
-                    return (
-                      <button
-                        key={cro.id}
-                        onClick={() => setActiveCroId(cro.id)}
-                        className={`flex shrink-0 items-center gap-2 border-r border-gray-200 px-4 py-3 text-sm transition-colors ${
-                          isActive ? 'bg-white text-gray-900 font-medium' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                        }`}
-                      >
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${dotClass}`} />
-                        <span className="max-w-[120px] truncate">{cro.name}</span>
-                        {d?.status === 'sent' && <span className="text-[10px] text-green-600">✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* ── INDIVIDUAL TAB ── */}
+            {activeTab === 'individual' && (
+              <div className="space-y-3">
+                {templateStatus !== 'ready' && Object.keys(drafts).length === 0 ? (
+                  <div className="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500">
+                    Generate a template above — it will be pre-filled for each CRO, ready to edit individually.
+                  </div>
+                ) : (
+                  <>
+                    {/* CRO tabs */}
+                    <div className="flex gap-2 flex-wrap">
+                      {crosWithEmail.map(cro => {
+                        const d = drafts[cro.id];
+                        return (
+                          <button
+                            key={cro.id}
+                            onClick={() => setActiveCroId(cro.id)}
+                            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                              activeCroId === cro.id
+                                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            {d?.status === 'sent' && <span className="text-green-600">✓</span>}
+                            {d?.status === 'error' && <span className="text-red-500">!</span>}
+                            {cro.name}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                {/* Draft editor */}
-                {activeCro && (
-                  <div className="p-5 space-y-4">
+                    {/* Active CRO draft editor */}
+                    {activeCroId && (() => {
+                      const cro   = crosWithEmail.find(c => c.id === activeCroId);
+                      const draft = drafts[activeCroId];
+                      if (!cro) return null;
 
-                    {/* Status banners */}
-                    {activeDraft?.status === 'generating' && (
-                      <div className="flex items-center gap-2.5 text-xs text-gray-500">
-                        <svg className="h-4 w-4 shrink-0 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Drafting IP-safe message for {activeCro.name}…
-                      </div>
-                    )}
+                      if (!draft) {
+                        return (
+                          <div className="rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-500">
+                            Generate the template above to create a draft for {cro.name}.
+                          </div>
+                        );
+                      }
 
-                    {activeDraft?.status === 'error' && (
-                      <div className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
-                        <p className="text-xs text-red-600">⚠ {activeDraft.errorMsg}</p>
+                      if (draft.status === 'sent') {
+                        return (
+                          <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700">
+                            ✓ Enquiry sent to {cro.name}.
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+                          <p className="text-xs text-gray-500">To: <span className="font-mono text-gray-700">{cro.email}</span></p>
+                          <input
+                            type="text"
+                            value={draft.subject}
+                            onChange={e => setDrafts(prev => ({ ...prev, [cro.id]: { ...prev[cro.id], subject: e.target.value } }))}
+                            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Subject"
+                          />
+                          <textarea
+                            rows={10}
+                            value={draft.body}
+                            onChange={e => setDrafts(prev => ({ ...prev, [cro.id]: { ...prev[cro.id], body: e.target.value } }))}
+                            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                          />
+                          {draft.status === 'error' && (
+                            <p className="text-xs text-red-600">{draft.errorMsg ?? 'Send failed — please retry'}</p>
+                          )}
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => handleIndividualSend(cro)}
+                              disabled={draft.status === 'sending'}
+                              className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-50"
+                            >
+                              {draft.status === 'sending' ? 'Sending…' : 'Approve & Send →'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Send all ready */}
+                    {crosWithEmail.some(c => drafts[c.id]?.status === 'ready') && (
+                      <div className="flex justify-end">
                         <button
-                          onClick={() => handleRedraft(activeCro)}
-                          className="shrink-0 rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:text-red-700 transition-colors"
+                          onClick={handleSendAll}
+                          className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
                         >
-                          Retry
+                          Send all ready drafts →
                         </button>
                       </div>
                     )}
+                  </>
+                )}
+              </div>
+            )}
 
-                    {activeDraft?.status === 'sent' && (
-                      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
-                        <span className="text-green-600">✓</span>
-                        <p className="text-xs text-green-700">
-                          {activeDraft.errorMsg
-                            ? `Saved (not sent — ${activeDraft.errorMsg})`
-                            : `Sent to ${activeCro.email}`}
-                        </p>
+            {/* ── CONTACT FORM TAB ── */}
+            {activeTab === 'contactform' && (
+              <div className="space-y-3">
+                {crosWithForm.length === 0 ? (
+                  <div className="rounded-xl border border-gray-200 bg-white py-10 text-center text-sm text-gray-500">
+                    No CROs in your selection have a contact form URL.
+                  </div>
+                ) : (
+                  <>
+                    {templateStatus !== 'ready' && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                        Generate a template above first — it will be pre-filled here for each CRO.
                       </div>
                     )}
-
-                    {/* To */}
-                    <div>
-                      <p className="mb-1 text-xs text-gray-500">To</p>
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
-                        {activeCro.email ?? <span className="text-red-600">No email address — cannot send</span>}
-                      </div>
-                    </div>
-
-                    {/* Subject */}
-                    <div>
-                      <p className="mb-1 text-xs text-gray-500">Subject</p>
-                      {activeDraft && activeDraft.status !== 'generating' ? (
-                        <input
-                          type="text"
-                          value={activeDraft.subject}
-                          disabled={activeDraft.status === 'sent' || activeDraft.status === 'sending'}
-                          onChange={e => setDrafts(prev => ({
-                            ...prev,
-                            [activeCro.id]: { ...prev[activeCro.id], subject: e.target.value },
-                          }))}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                        />
-                      ) : (
-                        <div className="h-9 animate-pulse rounded-lg border border-gray-200 bg-gray-100" />
-                      )}
-                    </div>
-
-                    {/* Body */}
-                    <div>
-                      <div className="mb-1 flex items-center justify-between">
-                        <p className="text-xs text-gray-500">Message</p>
-                        {activeDraft?.status === 'ready' && (
-                          <button
-                            onClick={() => handleRedraft(activeCro)}
-                            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            ↺ Re-draft
-                          </button>
-                        )}
-                      </div>
-                      {activeDraft && activeDraft.status !== 'generating' ? (
-                        <textarea
-                          value={activeDraft.body}
-                          disabled={activeDraft.status === 'sent' || activeDraft.status === 'sending'}
-                          onChange={e => setDrafts(prev => ({
-                            ...prev,
-                            [activeCro.id]: { ...prev[activeCro.id], body: e.target.value },
-                          }))}
-                          rows={12}
-                          className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                        />
-                      ) : (
-                        <div className="h-48 animate-pulse rounded-lg border border-gray-200 bg-gray-100" />
-                      )}
-                    </div>
-
-                    {/* Send controls */}
-                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
-                      <span className="text-xs text-gray-500">
-                        {activeDraft?.body
-                          ? `${activeDraft.body.split(/\s+/).filter(Boolean).length} words`
-                          : null}
-                      </span>
-                      <button
-                        onClick={() => handleSend(activeCro)}
-                        disabled={
-                          !activeDraft ||
-                          activeDraft.status !== 'ready' ||
-                          !activeCro.email ||
-                          !activeDraft.engagementId ||
-                          !activeDraft.messageId
-                        }
-                        className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-                      >
-                        {activeDraft?.status === 'sending' ? 'Sending…' : 'Approve & Send →'}
-                      </button>
-                    </div>
-                  </div>
+                    {crosWithForm.map(cro => {
+                      const personalizedText = templateStatus === 'ready'
+                        ? templateBody.replace(/\{\{CRO_NAME\}\}/g, cro.name)
+                        : '';
+                      return (
+                        <div key={cro.id} className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-semibold text-gray-900">{cro.name}</h3>
+                            <a
+                              href={cro.contact_form_url ?? '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 transition-colors"
+                            >
+                              Open contact form →
+                            </a>
+                          </div>
+                          {templateStatus === 'ready' ? (
+                            <>
+                              <p className="text-xs text-gray-500">
+                                Subject: <span className="font-medium text-gray-700">{templateSubject}</span>
+                              </p>
+                              <textarea
+                                readOnly
+                                rows={7}
+                                value={personalizedText}
+                                className="w-full rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 focus:outline-none resize-none"
+                              />
+                              <button
+                                onClick={() => handleCopy(cro.id, personalizedText)}
+                                className="rounded-lg border border-gray-200 bg-white px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                              >
+                                {copiedId === cro.id ? '✓ Copied!' : 'Copy text'}
+                              </button>
+                            </>
+                          ) : (
+                            <p className="text-xs text-gray-400 italic">Generate template above to see the message.</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
                 )}
-              </>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Footer */}
-        <div className="flex flex-col gap-3 border-t border-gray-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-500">
-            {sendMode === 'individual' && (
-              allSent
-                ? `All ${cros.length} enquir${cros.length !== 1 ? 'ies' : 'y'} sent.`
-                : readyCount > 1
-                ? `${readyCount} draft${readyCount !== 1 ? 's' : ''} ready to send.`
-                : null
-            )}
-            {sendMode === 'bulk' && allBulkSent && (
-              `All ${cros.length} enquir${cros.length !== 1 ? 'ies' : 'y'} sent.`
-            )}
-          </p>
-          <div className="flex gap-3">
-            {sendMode === 'individual' && readyCount > 1 && !allSent && (
-              <button
-                onClick={handleSendAll}
-                className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100"
-              >
-                Send all ready ({readyCount})
-              </button>
-            )}
-            {(sentCount > 0 || bulkSentCount > 0) && (
-              <a
-                href="/biotech/engagements"
-                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
-              >
-                View engagements →
-              </a>
-            )}
           </div>
         </div>
 
