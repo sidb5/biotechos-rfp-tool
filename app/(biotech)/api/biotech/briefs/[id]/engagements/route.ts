@@ -128,7 +128,7 @@ export async function POST(
 
     const { data: sendData, error: sendError } = await resend.emails.send({
       from:     fromField,
-      reply_to: senderEmail,
+      replyTo: senderEmail,
       to:       cro_email,
       subject,
       html:     textToHtml(messageBody),

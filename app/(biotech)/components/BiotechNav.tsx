@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import ThemeToggle from '@shared/components/ThemeToggle';
 
 const NAV = [
   {
@@ -77,7 +78,7 @@ export default function BiotechNav() {
         </a>
       ))}
 
-      <div className="mt-auto pt-4 border-t border-gray-800 mx-1">
+      <div className="mt-auto pt-4 border-t border-gray-800 mx-1 space-y-1">
         <a
           href="/biotech/briefs/new"
           className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
@@ -87,6 +88,7 @@ export default function BiotechNav() {
           </svg>
           New Brief
         </a>
+        <ThemeToggle className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors" />
       </div>
     </nav>
   );

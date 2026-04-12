@@ -83,7 +83,10 @@ export async function POST(
     .join('\n\n');
 
   // Build IP-safe brief context
-  const brief = engagement.rfp_internal_briefs as {
+  const briefRaw = Array.isArray(engagement.rfp_internal_briefs)
+    ? engagement.rfp_internal_briefs[0]
+    : engagement.rfp_internal_briefs;
+  const brief = briefRaw as unknown as {
     title: string | null;
     classification: string | null;
     extracted_data: Record<string, { value: unknown; tag?: string }> | null;

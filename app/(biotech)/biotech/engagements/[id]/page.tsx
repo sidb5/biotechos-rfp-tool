@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@shared/lib/supabase';
 import type { FollowupOutput } from '@biotech/prompts/followup';
@@ -23,6 +23,17 @@ interface RfpNote {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface GapAnalysis {
+  confirmed:   string[];
+  unaddressed: string[];
+  concerns:    string[];
+}
+
+interface MessageAiMetadata {
+  gap_analysis?:   GapAnalysis;
+  resolved_items?: string[];
+}
+
 interface Message {
   id:           string;
   direction:    'outbound' | 'inbound';
@@ -33,6 +44,7 @@ interface Message {
   sent_at:      string | null;
   created_at:   string;
   ai_generated: boolean;
+  ai_metadata?: MessageAiMetadata | null;
 }
 
 interface Engagement {
@@ -67,7 +79,8 @@ const STAGE_COLOR: Record<string, string> = {
   followup_sent:     'bg-blue-900/60 text-blue-300',
   meeting_scheduled: 'bg-purple-900/50 text-purple-300',
   meeting_done:      'bg-purple-800/50 text-purple-200',
-  rfp_sent:          'bg-blue-900/60 text-blue-300',
+  rfp_draft:         'bg-blue-900/40 text-blue-300',
+  rfp_sent:          'bg-indigo-900/60 text-indigo-300',
   awarded:           'bg-green-900/50 text-green-300',
   closed:            'bg-gray-800 text-gray-600',
 };
@@ -77,6 +90,52 @@ function fmt(iso: string | null): string {
   return new Date(iso).toLocaleString('en-US', {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
+}
+
+// ── Collapsible panel used in the right sidebar ───────────────────────────────
+
+function CollapsiblePanel({
+  title,
+  badge,
+  defaultOpen = true,
+  borderClass  = 'border-gray-700/60',
+  bgClass      = 'bg-gray-900/60',
+  titleClass   = 'text-gray-400',
+  children,
+}: {
+  title:        string;
+  badge?:       string | number;
+  defaultOpen?: boolean;
+  borderClass?: string;
+  bgClass?:     string;
+  titleClass?:  string;
+  children:     React.ReactNode;
+}) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div className={`rounded-xl border ${borderClass} ${bgClass} overflow-hidden`}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left gap-2"
+      >
+        <span className={`text-[11px] font-semibold uppercase tracking-widest ${titleClass}`}>
+          {title}
+        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          {badge !== undefined && (
+            <span className="text-[10px] text-gray-600 font-normal">({badge})</span>
+          )}
+          <svg
+            className={`h-3 w-3 text-gray-600 transition-transform duration-150 ${open ? 'rotate-0' : '-rotate-90'}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+      {open && <div className="px-4 pb-4 space-y-2">{children}</div>}
+    </div>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -106,11 +165,26 @@ export default function EngagementThreadPage() {
   const [draftBody, setDraftBody]           = useState('');
   const [draftMsgId, setDraftMsgId]         = useState<string | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<Set<number>>(new Set());
+
+  // Task 3.3 — resolved gap tracking
+  const [resolvedGapItems, setResolvedGapItems] = useState<Set<string>>(new Set());
+  const [resolvingItem, setResolvingItem]       = useState<string | null>(null);
+
+  // Compact thread — track which messages the user has expanded beyond 4 lines
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  function toggleMsgExpand(id: string) {
+    setExpandedMessages(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
   const [sending, setSending]               = useState(false);
   const [sendError, setSendError]           = useState('');
   const [sendSuccess, setSendSuccess]       = useState(false);
 
   // Meeting invite (Task 4.1)
+  const [showMeetingPanel, setShowMeetingPanel] = useState(false); // panel visible (not auto-gen)
   const [meetingSubject, setMeetingSubject]     = useState('');
   const [meetingBody, setMeetingBody]           = useState('');
   const [meetingMsgId, setMeetingMsgId]         = useState<string | null>(null);
@@ -118,6 +192,18 @@ export default function EngagementThreadPage() {
   const [meetingError, setMeetingError]         = useState('');
   const [meetingSent, setMeetingSent]           = useState(false);
   const [noSchedulingLink, setNoSchedulingLink] = useState(false);
+
+  function closeMeetingPanel() {
+    setShowMeetingPanel(false);
+    // Only clear if not yet sent — preserve sent state for display in thread
+    if (!meetingSent) {
+      setMeetingBody('');
+      setMeetingSubject('');
+      setMeetingMsgId(null);
+      setMeetingError('');
+      setNoSchedulingLink(false);
+    }
+  }
 
   // Meeting notes + debrief (Tasks 5.1 & 5.2)
   const [showNotesModal, setShowNotesModal]     = useState(false);
@@ -144,7 +230,7 @@ export default function EngagementThreadPage() {
         .single(),
       supabase
         .from('engagement_messages')
-        .select('id, direction, message_type, subject, body, status, sent_at, created_at, ai_generated')
+        .select('id, direction, message_type, subject, body, status, sent_at, created_at, ai_generated, ai_metadata')
         .eq('engagement_id', engagementId)
         .order('created_at', { ascending: true }),
       supabase
@@ -157,14 +243,14 @@ export default function EngagementThreadPage() {
     ]);
 
     if (engData) {
-      setEngagement(engData as Engagement);
+      setEngagement(engData as unknown as Engagement);
       // Restore + RFP selections from the brief's persisted notes
-      const savedNotes = ((engData as Engagement).rfp_internal_briefs?.rfp_context_notes ?? []) as RfpNote[];
+      const savedNotes = ((engData as unknown as Engagement).rfp_internal_briefs?.rfp_context_notes ?? []) as RfpNote[];
       setRfpNoted(new Map(savedNotes.map(n => [n.text, n.id])));
     }
     if (msgData) {
       setMessages(msgData as Message[]);
-      // Restore any existing followup draft
+      // Restore any existing followup draft + its gap analysis
       const existingFollowup = (msgData as Message[]).find(
         m => m.direction === 'outbound' && m.message_type === 'followup' && m.status === 'draft'
       );
@@ -172,6 +258,19 @@ export default function EngagementThreadPage() {
         setDraftSubject(existingFollowup.subject ?? '');
         setDraftBody(existingFollowup.body ?? '');
         setDraftMsgId(existingFollowup.id);
+        // Restore gap analysis from ai_metadata (persisted when draft was created)
+        const meta = existingFollowup.ai_metadata as MessageAiMetadata | null;
+        if (meta?.gap_analysis) {
+          setFollowup(prev => prev ?? {
+            gap_analysis:        meta.gap_analysis!,
+            draft_subject:       existingFollowup.subject ?? '',
+            draft_reply:         existingFollowup.body    ?? '',
+            suggested_questions: [],
+          } as FollowupOutput);
+        }
+        if (meta?.resolved_items) {
+          setResolvedGapItems(new Set(meta.resolved_items));
+        }
       }
       // Restore any existing meeting invite draft
       const existingMeeting = (msgData as Message[]).find(
@@ -290,6 +389,7 @@ export default function EngagementThreadPage() {
     setSendSuccess(true);
     setSending(false);
     setFollowup(null);
+    setResolvedGapItems(new Set());
     await loadThread();
   }
 
@@ -321,9 +421,99 @@ export default function EngagementThreadPage() {
       });
       const json = await res.json();
       if (res.ok && json.note_id) {
-        setRfpNoted(prev => new Map([...prev, [text, json.note_id as string]]));
+        setRfpNoted(prev => new Map(Array.from(prev).concat([[text, json.note_id as string]])));
       }
     }
+  }
+
+  // ── Toggle gap item resolved (Task 3.3) ──────────────────────────────────
+
+  async function toggleResolvedGap(itemText: string) {
+    if (!draftMsgId) return;
+    setResolvingItem(itemText);
+
+    const isCurrentlyResolved = resolvedGapItems.has(itemText);
+    const willBeResolved = !isCurrentlyResolved;
+
+    // Optimistic update
+    setResolvedGapItems(prev => {
+      const next = new Set(prev);
+      willBeResolved ? next.add(itemText) : next.delete(itemText);
+      return next;
+    });
+
+    try {
+      await fetch(`/api/biotech/engagements/${engagementId}/gap-resolve`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          message_id: draftMsgId,
+          item_text:  itemText,
+          resolved:   willBeResolved,
+        }),
+      });
+    } catch {
+      // Rollback on failure
+      setResolvedGapItems(prev => {
+        const next = new Set(prev);
+        willBeResolved ? next.delete(itemText) : next.add(itemText);
+        return next;
+      });
+    }
+    setResolvingItem(null);
+  }
+
+  // ── Delete draft engagement ──────────────────────────────────────────────
+
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting]           = useState(false);
+  const [deleteError, setDeleteError]     = useState('');
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const res  = await fetch(`/api/biotech/engagements/${engagementId}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) {
+        setDeleteError((json.error as string) ?? 'Failed to delete');
+        setDeleting(false);
+        setDeleteConfirm(false);
+        return;
+      }
+      // Redirect to engagements list after deletion
+      router.push('/biotech/engagements');
+    } catch {
+      setDeleteError('Network error — please retry');
+      setDeleting(false);
+      setDeleteConfirm(false);
+    }
+  }
+
+  // ── Mark engagement outcome (awarded / closed) ───────────────────────────
+
+  const [markingStage, setMarkingStage] = useState<string | null>(null);
+  const [markStageError, setMarkStageError] = useState('');
+
+  async function handleMarkStage(newStage: 'awarded' | 'closed' | 'rfp_sent') {
+    setMarkingStage(newStage);
+    setMarkStageError('');
+    try {
+      const res = await fetch(`/api/biotech/engagements/${engagementId}/stage`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ stage: newStage }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setMarkStageError((json.error as string) ?? 'Failed to update stage');
+      } else {
+        await loadThread();
+      }
+    } catch {
+      setMarkStageError('Network error — please retry');
+    }
+    setMarkingStage(null);
   }
 
   // ── Submit meeting notes + trigger debrief ───────────────────────────────
@@ -447,12 +637,24 @@ export default function EngagementThreadPage() {
   }
 
   const isEnquiryDraft      = engagement.stage === 'enquiry_draft';
-  const canLogResponse      = ['enquiry_sent', 'followup_sent'].includes(engagement.stage);
-  const hasFollowupDraft    = engagement.stage === 'followup_draft';
-  const canScheduleMeeting  = engagement.stage === 'followup_sent';
+  // Can log a CRO response at any active stage — including after RFP sent (loopback)
+  const canLogResponse      = ['enquiry_sent', 'followup_sent', 'meeting_scheduled',
+                               'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  // Followup draft panel shows whenever a draft exists or we're in that stage
+  const hasFollowupDraft    = engagement.stage === 'followup_draft'
+    || (engagement.stage === 'meeting_done' && !!draftMsgId);
+  // Can schedule a meeting after followups, after a previous meeting, or even after RFP sent
+  const canScheduleMeeting  = ['followup_sent', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
   const hasMeetingDraft     = !!meetingMsgId && !meetingSent;
-  const canLogMeetingNotes  = engagement.stage === 'meeting_scheduled';
+  // Can log meeting notes when a meeting is scheduled OR to log a second/follow-up meeting
+  const canLogMeetingNotes  = ['meeting_scheduled', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
   const hasDebrief          = !!debrief || debriefLoading || engagement.stage === 'meeting_done';
+  // Show RFP shortcut at meeting_done and beyond
+  const canGoToRfp          = ['meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  // Can mark as awarded or closed at terminal stages
+  const canMarkOutcome      = ['rfp_sent', 'rfp_draft', 'meeting_done'].includes(engagement.stage);
+  // Can revert from an outcome back to rfp_sent (undo mis-click)
+  const canRevertOutcome    = ['awarded', 'closed'].includes(engagement.stage);
   const stageLabel = STAGE_LABELS[engagement.stage] ?? engagement.stage;
   const stageColor = STAGE_COLOR[engagement.stage] ?? 'bg-gray-700 text-gray-400';
 
@@ -498,13 +700,12 @@ export default function EngagementThreadPage() {
                   + Log CRO response
                 </button>
               )}
-              {canScheduleMeeting && !hasMeetingDraft && (
+              {canScheduleMeeting && !hasMeetingDraft && !meetingSent && (
                 <button
-                  onClick={handleGenerateMeetingInvite}
-                  disabled={meetingLoading}
-                  className="shrink-0 rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
+                  onClick={() => setShowMeetingPanel(true)}
+                  className="shrink-0 rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600"
                 >
-                  {meetingLoading ? 'Generating…' : '📅 Schedule meeting'}
+                  📅 Schedule meeting
                 </button>
               )}
               {canLogMeetingNotes && (
@@ -512,8 +713,80 @@ export default function EngagementThreadPage() {
                   onClick={() => setShowNotesModal(true)}
                   className="shrink-0 rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600"
                 >
-                  📋 Log meeting notes
+                  📋 {engagement.stage === 'meeting_done' ? 'Log another meeting' : 'Log meeting notes'}
                 </button>
+              )}
+              {canGoToRfp && (
+                <a
+                  href={`/biotech/briefs/${engagement.brief_id}/rfp`}
+                  className="shrink-0 rounded-lg border border-blue-600/50 bg-blue-600/10 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-600/20 hover:text-blue-200"
+                >
+                  📄 {engagement.stage === 'rfp_sent' ? 'View / Resend RFP' : 'Build RFP →'}
+                </a>
+              )}
+              {canMarkOutcome && (
+                <>
+                  <button
+                    onClick={() => handleMarkStage('awarded')}
+                    disabled={markingStage !== null}
+                    className="shrink-0 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-600 disabled:opacity-50"
+                  >
+                    {markingStage === 'awarded' ? 'Saving…' : '🏆 Mark awarded'}
+                  </button>
+                  <button
+                    onClick={() => handleMarkStage('closed')}
+                    disabled={markingStage !== null}
+                    className="shrink-0 rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-gray-400 transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-50"
+                  >
+                    {markingStage === 'closed' ? 'Saving…' : 'Mark closed'}
+                  </button>
+                </>
+              )}
+              {canRevertOutcome && (
+                <button
+                  onClick={() => handleMarkStage('rfp_sent')}
+                  disabled={markingStage !== null}
+                  className="shrink-0 rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium text-gray-500 transition-colors hover:border-gray-500 hover:text-gray-300 disabled:opacity-50"
+                  title="Revert to RFP sent — undo outcome mark"
+                >
+                  {markingStage === 'rfp_sent' ? 'Reverting…' : '↩ Revert to RFP sent'}
+                </button>
+              )}
+              {markStageError && (
+                <p className="text-xs text-red-400">⚠ {markStageError}</p>
+              )}
+
+              {/* Delete draft — only available before the enquiry is sent */}
+              {isEnquiryDraft && (
+                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-800">
+                  {!deleteConfirm ? (
+                    <button
+                      onClick={() => setDeleteConfirm(true)}
+                      className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-red-800 hover:text-red-400"
+                    >
+                      Delete draft
+                    </button>
+                  ) : (
+                    <>
+                      <span className="text-xs text-gray-500 shrink-0">Delete this draft?</span>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                      >
+                        {deleting ? 'Deleting…' : 'Yes, delete'}
+                      </button>
+                      <button
+                        onClick={() => { setDeleteConfirm(false); setDeleteError(''); }}
+                        disabled={deleting}
+                        className="shrink-0 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  {deleteError && <p className="text-xs text-red-400">⚠ {deleteError}</p>}
+                </div>
               )}
             </div>
           </div>
@@ -538,11 +811,38 @@ export default function EngagementThreadPage() {
         )}
 
         {/* Main two-column layout when right panel is active */}
-        <div className={`grid gap-6 items-start ${(followup || followupLoading || hasFollowupDraft || canScheduleMeeting || hasMeetingDraft || hasDebrief) ? 'grid-cols-1 lg:grid-cols-[1fr_400px]' : 'grid-cols-1'}`}>
+        <div className={`grid gap-6 items-start ${(followup || followupLoading || hasFollowupDraft || showMeetingPanel || hasMeetingDraft || hasDebrief) ? 'grid-cols-1 lg:grid-cols-[1fr_400px]' : 'grid-cols-1'}`}>
 
           {/* ── Left: message thread ── */}
           <div className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-500">Thread</h2>
+
+            {/* ── "Still need to know" card (Task 3.3) ── */}
+            {followup?.gap_analysis && (() => {
+              const openItems = [
+                ...followup.gap_analysis.unaddressed,
+                ...followup.gap_analysis.concerns,
+              ].filter(item => !resolvedGapItems.has(item));
+              if (openItems.length === 0) return null;
+              return (
+                <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-400">
+                      ⚠ Still need to know ({openItems.length})
+                    </p>
+                    <p className="text-[10px] text-gray-600">Mark resolved in gap analysis →</p>
+                  </div>
+                  <ul className="space-y-1">
+                    {openItems.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-amber-700">
+                        <span className="mt-0.5 shrink-0">·</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
 
             {messages.length === 0 ? (
               <div className="rounded-xl border border-gray-800 bg-gray-900/30 px-6 py-10 text-center text-sm text-gray-600">
@@ -592,10 +892,31 @@ export default function EngagementThreadPage() {
                         <p className="text-xs font-medium text-gray-400">Subject: {msg.subject}</p>
                       )}
 
-                      {/* Body */}
-                      <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
-                        {msg.body ?? ''}
-                      </p>
+                      {/* Body — compact (4 lines) with Show more toggle */}
+                      {(() => {
+                        const bodyText = msg.body ?? '';
+                        // Draft messages and the latest message start expanded
+                        const autoExpand = isDraft || msg.id === messages[messages.length - 1]?.id;
+                        const isExpanded = autoExpand || expandedMessages.has(msg.id);
+                        const needsToggle = bodyText.length > 280 && !autoExpand;
+                        return (
+                          <div>
+                            <p className={`text-sm text-gray-300 whitespace-pre-wrap leading-relaxed ${
+                              !isExpanded ? 'line-clamp-4' : ''
+                            }`}>
+                              {bodyText}
+                            </p>
+                            {needsToggle && (
+                              <button
+                                onClick={() => toggleMsgExpand(msg.id)}
+                                className="mt-1 text-[11px] text-gray-600 hover:text-gray-400 transition-colors"
+                              >
+                                {isExpanded ? '▴ Show less' : '▾ Show more'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Delivery status — only for sent/delivered/bounced messages */}
                       {isOut && !isDraft && ['sent', 'delivered', 'bounced'].includes(msg.status) && (
@@ -628,9 +949,27 @@ export default function EngagementThreadPage() {
             )}
           </div>
 
-          {/* ── Right: meeting invite panel (Task 4.1) ── */}
-          {(canScheduleMeeting || hasMeetingDraft) && (
-            <aside className="space-y-4 lg:sticky lg:top-4">
+          {/* ── Right: consolidated sticky panel ── */}
+          {(showMeetingPanel || hasMeetingDraft || hasDebrief || followup || followupLoading || hasFollowupDraft) && (
+            <aside className="space-y-3 lg:sticky lg:top-4 max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
+
+          {/* ══ Meeting invite ══ */}
+          {(showMeetingPanel || hasMeetingDraft) && (<div className="space-y-3">
+
+              {/* Panel header with cancel */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-purple-400">
+                  📅 Meeting invite
+                </h3>
+                {!meetingSent && (
+                  <button
+                    onClick={closeMeetingPanel}
+                    className="text-xs text-gray-600 hover:text-gray-300 transition-colors border border-gray-700 hover:border-gray-500 rounded px-2 py-1"
+                  >
+                    ✕ Cancel
+                  </button>
+                )}
+              </div>
 
               {/* No scheduling link configured */}
               {noSchedulingLink && (
@@ -648,6 +987,30 @@ export default function EngagementThreadPage() {
                 </div>
               )}
 
+              {/* Step 1: Generate prompt — shown before generating */}
+              {!meetingBody && !meetingLoading && !noSchedulingLink && (
+                <div className="rounded-xl border border-purple-800/30 bg-purple-950/10 p-5 space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-300 font-medium mb-1">AI-draft a meeting request</p>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Claude will write a short professional meeting request email
+                      with your booking link included. You can edit it before sending.
+                    </p>
+                  </div>
+                  {meetingError && (
+                    <p className="text-xs text-red-400 rounded-lg border border-red-800/40 bg-red-950/20 px-3 py-2">
+                      ⚠ {meetingError}
+                    </p>
+                  )}
+                  <button
+                    onClick={handleGenerateMeetingInvite}
+                    className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-950"
+                  >
+                    ✦ Generate invite draft →
+                  </button>
+                </div>
+              )}
+
               {/* Generating spinner */}
               {meetingLoading && (
                 <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-5 flex items-center gap-3 text-sm text-gray-500">
@@ -659,25 +1022,18 @@ export default function EngagementThreadPage() {
                 </div>
               )}
 
-              {meetingError && (
-                <div className="rounded-xl border border-red-800/40 bg-red-950/20 p-4 text-xs text-red-400">
-                  ⚠ {meetingError}
-                </div>
-              )}
-
-              {/* Draft editor */}
+              {/* Step 2: Draft editor — shown after generation */}
               {meetingBody && !meetingLoading && (
                 <div className="rounded-xl border border-purple-800/30 bg-purple-950/10 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-purple-300">
-                      📅 Meeting invite draft
-                    </h3>
-                    {/* Re-draft button */}
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-400">
+                      Review &amp; edit draft
+                    </p>
                     <button
-                      onClick={() => { setMeetingBody(''); setMeetingMsgId(null); handleGenerateMeetingInvite(); }}
+                      onClick={() => { setMeetingBody(''); setMeetingMsgId(null); setMeetingError(''); handleGenerateMeetingInvite(); }}
                       className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
                     >
-                      Re-draft
+                      ↺ Re-draft
                     </button>
                   </div>
 
@@ -687,7 +1043,8 @@ export default function EngagementThreadPage() {
                       type="text"
                       value={meetingSubject}
                       onChange={e => setMeetingSubject(e.target.value)}
-                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      disabled={meetingSent}
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -696,45 +1053,34 @@ export default function EngagementThreadPage() {
                     <textarea
                       value={meetingBody}
                       onChange={e => setMeetingBody(e.target.value)}
+                      disabled={meetingSent}
                       rows={9}
-                      className="w-full resize-y rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-gray-100 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      className="w-full resize-y rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-gray-100 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                   </div>
 
                   {meetingError && <p className="text-xs text-red-400">⚠ {meetingError}</p>}
-                  {meetingSent  && <p className="text-xs text-green-400">✓ Meeting invite sent — stage updated to &quot;Meeting scheduled&quot;</p>}
+                  {meetingSent  && (
+                    <p className="text-xs text-green-400">
+                      ✓ Meeting invite sent — stage updated to &quot;Meeting scheduled&quot;
+                    </p>
+                  )}
 
-                  <button
-                    onClick={handleSendMeetingInvite}
-                    disabled={meetingLoading || !meetingBody.trim() || !meetingMsgId || meetingSent}
-                    className="w-full rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500"
-                  >
-                    {meetingLoading ? 'Sending…' : 'Approve & Send invite →'}
-                  </button>
+                  {!meetingSent && (
+                    <button
+                      onClick={handleSendMeetingInvite}
+                      disabled={meetingLoading || !meetingBody.trim() || !meetingMsgId}
+                      className="w-full rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500"
+                    >
+                      {meetingLoading ? 'Sending…' : 'Approve & Send invite →'}
+                    </button>
+                  )}
                 </div>
               )}
+          </div>)}
 
-              {/* Prompt to generate if no draft yet and no error */}
-              {!meetingBody && !meetingLoading && !noSchedulingLink && !meetingError && (
-                <div className="rounded-xl border border-purple-800/20 bg-purple-950/10 p-5 text-center space-y-3">
-                  <p className="text-sm text-purple-300 font-medium">Ready to schedule a call?</p>
-                  <p className="text-xs text-gray-600">
-                    AI will draft a short meeting request with your booking link.
-                  </p>
-                  <button
-                    onClick={handleGenerateMeetingInvite}
-                    className="rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600"
-                  >
-                    Generate invite →
-                  </button>
-                </div>
-              )}
-            </aside>
-          )}
-
-          {/* ── Right: meeting debrief panel (Tasks 5.1 & 5.2) ── */}
-          {hasDebrief && (
-            <aside className="space-y-4 lg:sticky lg:top-4">
+          {/* ══ Meeting debrief ══ */}
+          {hasDebrief && (<div className="space-y-3">
 
               {debriefLoading && (
                 <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-5 flex items-center gap-3 text-sm text-gray-500">
@@ -748,14 +1094,21 @@ export default function EngagementThreadPage() {
 
               {debrief && !debriefLoading && (
                 <>
-                  <div className="rounded-xl border border-purple-800/30 bg-purple-950/10 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">Meeting debrief</p>
+                  {/* Section label */}
+                  <div className="px-1 pt-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-purple-500">Meeting debrief</p>
                   </div>
 
-                  {/* Gaps resolved */}
+                  {/* ✓ Confirmed in meeting */}
                   {debrief.gaps_resolved.length > 0 && (
-                    <div className="rounded-xl border border-green-800/30 bg-green-950/10 p-4 space-y-2">
-                      <p className="text-[11px] font-semibold text-green-400 uppercase tracking-wide">✓ Confirmed in meeting</p>
+                    <CollapsiblePanel
+                      title="✓ Confirmed in meeting"
+                      badge={debrief.gaps_resolved.length}
+                      defaultOpen={true}
+                      borderClass="border-green-800/30"
+                      bgClass="bg-green-950/10"
+                      titleClass="text-green-400"
+                    >
                       <ul className="space-y-1.5">
                         {debrief.gaps_resolved.map((item, i) => (
                           <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
@@ -763,13 +1116,19 @@ export default function EngagementThreadPage() {
                           </li>
                         ))}
                       </ul>
-                    </div>
+                    </CollapsiblePanel>
                   )}
 
-                  {/* New concerns */}
+                  {/* ⚠ New concerns */}
                   {debrief.new_concerns.length > 0 && (
-                    <div className="rounded-xl border border-red-800/30 bg-red-950/10 p-4 space-y-2">
-                      <p className="text-[11px] font-semibold text-red-400 uppercase tracking-wide">⚠ New concerns</p>
+                    <CollapsiblePanel
+                      title="⚠ New concerns"
+                      badge={debrief.new_concerns.length}
+                      defaultOpen={true}
+                      borderClass="border-red-800/30"
+                      bgClass="bg-red-950/10"
+                      titleClass="text-red-400"
+                    >
                       <ul className="space-y-1.5">
                         {debrief.new_concerns.map((item, i) => (
                           <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
@@ -777,16 +1136,19 @@ export default function EngagementThreadPage() {
                           </li>
                         ))}
                       </ul>
-                    </div>
+                    </CollapsiblePanel>
                   )}
 
-                  {/* RFP refinements — shape what gets written in the RFP */}
+                  {/* 📝 RFP refinements */}
                   {debrief.rfp_refinements.length > 0 && (
-                    <div className="rounded-xl border border-blue-800/30 bg-blue-950/10 p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold text-blue-400 uppercase tracking-wide">📝 RFP refinements</p>
-                        <span className="text-[10px] text-gray-600">Changes to write into RFP</span>
-                      </div>
+                    <CollapsiblePanel
+                      title="📝 RFP refinements"
+                      badge={debrief.rfp_refinements.length}
+                      defaultOpen={true}
+                      borderClass="border-blue-800/30"
+                      bgClass="bg-blue-950/10"
+                      titleClass="text-blue-400"
+                    >
                       <ul className="space-y-2">
                         {debrief.rfp_refinements.map((item, i) => {
                           const noted = rfpNoted.has(item);
@@ -797,7 +1159,6 @@ export default function EngagementThreadPage() {
                               <button
                                 onClick={() => toggleRfpNote(item, 'rfp_refinement')}
                                 className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${noted ? 'bg-blue-900/60 text-blue-300' : 'text-gray-600 hover:text-blue-400'}`}
-                                title={noted ? 'Remove from RFP notes' : 'Save to RFP notes'}
                               >
                                 {noted ? '✓ Saved' : '+ RFP'}
                               </button>
@@ -805,16 +1166,19 @@ export default function EngagementThreadPage() {
                           );
                         })}
                       </ul>
-                    </div>
+                    </CollapsiblePanel>
                   )}
 
-                  {/* Open questions — become [TO BE SPECIFIED] gaps in the RFP */}
+                  {/* ❓ Still open */}
                   {debrief.open_questions.length > 0 && (
-                    <div className="rounded-xl border border-amber-800/30 bg-amber-950/10 p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold text-amber-400 uppercase tracking-wide">❓ Still open</p>
-                        <span className="text-[10px] text-gray-600">Gaps in the RFP</span>
-                      </div>
+                    <CollapsiblePanel
+                      title="❓ Still open"
+                      badge={debrief.open_questions.length}
+                      defaultOpen={true}
+                      borderClass="border-amber-800/30"
+                      bgClass="bg-amber-950/10"
+                      titleClass="text-amber-400"
+                    >
                       <ul className="space-y-2">
                         {debrief.open_questions.map((item, i) => {
                           const noted = rfpNoted.has(item);
@@ -825,7 +1189,6 @@ export default function EngagementThreadPage() {
                               <button
                                 onClick={() => toggleRfpNote(item, 'open_question')}
                                 className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${noted ? 'bg-amber-900/60 text-amber-300' : 'text-gray-600 hover:text-amber-400'}`}
-                                title={noted ? 'Remove from RFP notes' : 'Flag as RFP gap'}
                               >
                                 {noted ? '✓ Flagged' : '+ RFP'}
                               </button>
@@ -833,13 +1196,13 @@ export default function EngagementThreadPage() {
                           );
                         })}
                       </ul>
-                    </div>
+                    </CollapsiblePanel>
                   )}
 
                   {rfpNoted.size > 0 && (
                     <div className="rounded-lg bg-gray-800/60 px-3 py-2 flex items-center justify-between">
                       <p className="text-[11px] text-gray-500">
-                        {rfpNoted.size} item{rfpNoted.size !== 1 ? 's' : ''} saved to brief RFP context
+                        {rfpNoted.size} item{rfpNoted.size !== 1 ? 's' : ''} saved to RFP context
                       </p>
                       <a
                         href={`/biotech/briefs/${engagement?.brief_id}`}
@@ -852,18 +1215,15 @@ export default function EngagementThreadPage() {
                 </>
               )}
 
-              {/* Prompt to log notes when meeting_done but no debrief loaded */}
               {engagement.stage === 'meeting_done' && !debrief && !debriefLoading && (
-                <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-5 text-center text-sm text-gray-600">
-                  Meeting notes were saved but AI analysis is not available.
+                <div className="rounded-xl border border-gray-800 bg-gray-900/30 p-4 text-center text-xs text-gray-600">
+                  Meeting notes saved — AI analysis not available.
                 </div>
               )}
-            </aside>
-          )}
+          </div>)}
 
-          {/* ── Right: AI followup panel (Task 3.2) ── */}
-          {(followup || followupLoading || hasFollowupDraft) && (
-            <aside className="space-y-4 lg:sticky lg:top-4">
+          {/* ══ AI followup ══ */}
+          {(followup || followupLoading || hasFollowupDraft) && (<div className="space-y-3">
 
               {/* Generating spinner */}
               {followupLoading && (
@@ -884,12 +1244,14 @@ export default function EngagementThreadPage() {
 
               {followup && !followupLoading && (
                 <>
-                  {/* Gap analysis */}
-                  <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-4 space-y-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Gap analysis</h3>
-
+                  {/* Gap analysis — collapsible */}
+                  <CollapsiblePanel
+                    title="Gap analysis"
+                    badge={[...followup.gap_analysis.unaddressed, ...followup.gap_analysis.concerns].filter(i => !resolvedGapItems.has(i)).length || undefined}
+                    defaultOpen={true}
+                  >
                     {followup.gap_analysis.confirmed.length > 0 && (
-                      <div>
+                      <div className="mb-2">
                         <p className="text-[11px] font-semibold text-green-400 mb-1.5">✓ Confirmed</p>
                         <ul className="space-y-1">
                           {followup.gap_analysis.confirmed.map((item, i) => (
@@ -904,12 +1266,28 @@ export default function EngagementThreadPage() {
                     {followup.gap_analysis.unaddressed.length > 0 && (
                       <div>
                         <p className="text-[11px] font-semibold text-amber-400 mb-1.5">? Unaddressed</p>
-                        <ul className="space-y-1">
-                          {followup.gap_analysis.unaddressed.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
-                              <span className="mt-0.5 shrink-0 text-amber-600">?</span>{item}
-                            </li>
-                          ))}
+                        <ul className="space-y-1.5">
+                          {followup.gap_analysis.unaddressed.map((item, i) => {
+                            const resolved = resolvedGapItems.has(item);
+                            return (
+                              <li key={i} className={`flex items-start gap-2 text-xs transition-opacity ${resolved ? 'opacity-40' : ''}`}>
+                                <span className="mt-0.5 shrink-0 text-amber-600">?</span>
+                                <span className={`flex-1 ${resolved ? 'line-through text-gray-600' : 'text-gray-400'}`}>{item}</span>
+                                <button
+                                  onClick={() => toggleResolvedGap(item)}
+                                  disabled={resolvingItem === item}
+                                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                    resolved
+                                      ? 'bg-green-900/40 text-green-400 hover:bg-gray-800'
+                                      : 'text-gray-600 hover:text-green-400'
+                                  }`}
+                                  title={resolved ? 'Mark unresolved' : 'Mark resolved'}
+                                >
+                                  {resolved ? '✓ Resolved' : 'Resolve'}
+                                </button>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
@@ -917,24 +1295,41 @@ export default function EngagementThreadPage() {
                     {followup.gap_analysis.concerns.length > 0 && (
                       <div>
                         <p className="text-[11px] font-semibold text-red-400 mb-1.5">⚠ Concerns</p>
-                        <ul className="space-y-1">
-                          {followup.gap_analysis.concerns.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
-                              <span className="mt-0.5 shrink-0 text-red-600">⚠</span>{item}
-                            </li>
-                          ))}
+                        <ul className="space-y-1.5">
+                          {followup.gap_analysis.concerns.map((item, i) => {
+                            const resolved = resolvedGapItems.has(item);
+                            return (
+                              <li key={i} className={`flex items-start gap-2 text-xs transition-opacity ${resolved ? 'opacity-40' : ''}`}>
+                                <span className="mt-0.5 shrink-0 text-red-600">⚠</span>
+                                <span className={`flex-1 ${resolved ? 'line-through text-gray-600' : 'text-gray-400'}`}>{item}</span>
+                                <button
+                                  onClick={() => toggleResolvedGap(item)}
+                                  disabled={resolvingItem === item}
+                                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                    resolved
+                                      ? 'bg-green-900/40 text-green-400 hover:bg-gray-800'
+                                      : 'text-gray-600 hover:text-green-400'
+                                  }`}
+                                  title={resolved ? 'Mark unresolved' : 'Mark resolved'}
+                                >
+                                  {resolved ? '✓ Resolved' : 'Resolve'}
+                                </button>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
-                  </div>
+                  </CollapsiblePanel>
 
-                  {/* Suggested questions as checkboxes */}
+                  {/* Suggested questions */}
                   {followup.suggested_questions.length > 0 && (
-                    <div className="rounded-xl border border-gray-700/60 bg-gray-900/60 p-4 space-y-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
-                        Suggested questions
-                        <span className="ml-1.5 text-gray-600 font-normal normal-case">(check to insert into reply)</span>
-                      </h3>
+                    <CollapsiblePanel
+                      title="Suggested questions"
+                      badge={followup.suggested_questions.length}
+                      defaultOpen={false}
+                    >
+                      <p className="text-[10px] text-gray-600 mb-2">Check to insert into reply</p>
                       <div className="space-y-2">
                         {followup.suggested_questions.map((q, i) => (
                           <label key={i} className="flex items-start gap-2.5 cursor-pointer group">
@@ -952,7 +1347,7 @@ export default function EngagementThreadPage() {
                           </label>
                         ))}
                       </div>
-                    </div>
+                    </CollapsiblePanel>
                   )}
                 </>
               )}
@@ -998,6 +1393,8 @@ export default function EngagementThreadPage() {
                   </button>
                 </div>
               )}
+          </div>)}
+
             </aside>
           )}
         </div>

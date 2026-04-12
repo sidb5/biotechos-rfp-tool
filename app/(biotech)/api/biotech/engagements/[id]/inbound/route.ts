@@ -9,8 +9,10 @@ import { biotechClaude } from '@biotech/lib/claude';
 import { buildFollowupPrompt, type FollowupOutput } from '@biotech/prompts/followup';
 import type { ExtractedData } from '@biotech/prompts/extract-brief';
 
-// Max messages to pass as context to Claude
-const MAX_CONTEXT_MESSAGES = 5;
+// Context window: pass up to 8 most recent messages.
+// For threads with more than 8 prior messages, older ones are summarised first.
+const MAX_CONTEXT_MESSAGES = 8;
+const SUMMARISE_THRESHOLD  = 8; // summarise when prior message count exceeds this
 
 export async function POST(
   req: NextRequest,
@@ -62,11 +64,22 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to save response' }, { status: 500 });
   }
 
-  // Update stage → response_received
-  await supabase
-    .from('cro_engagements')
-    .update({ stage: 'response_received', updated_at: new Date().toISOString() })
-    .eq('id', engagementId);
+  // Advance stage to response_received — but only if the engagement is still
+  // in an early pre-meeting stage. After meeting_done the stage should not
+  // regress — the meeting context must be preserved.
+  const PRE_MEETING_STAGES = ['enquiry_sent', 'followup_sent', 'meeting_scheduled'];
+  if (PRE_MEETING_STAGES.includes(engagement.stage)) {
+    await supabase
+      .from('cro_engagements')
+      .update({ stage: 'response_received', updated_at: new Date().toISOString() })
+      .eq('id', engagementId);
+  } else {
+    // Just bump updated_at so the engagement appears active in lists
+    await supabase
+      .from('cro_engagements')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', engagementId);
+  }
 
   // ── Load context for AI followup ────────────────────────────────────────────
 
@@ -77,24 +90,52 @@ export async function POST(
     .eq('id', engagement.brief_id)
     .single();
 
-  // Load prior messages (up to MAX_CONTEXT_MESSAGES, excluding the one just inserted)
-  const { data: priorMessages } = await supabase
+  // Load ALL prior messages (excluding the one just inserted) so we can decide on compression
+  const { data: allPriorMessages } = await supabase
     .from('engagement_messages')
     .select('direction, message_type, subject, body, created_at')
     .eq('engagement_id', engagementId)
     .neq('id', inboundMsg.id)
-    .order('created_at', { ascending: false })
-    .limit(MAX_CONTEXT_MESSAGES);
+    .order('created_at', { ascending: true }); // oldest first
 
-  // Format message history oldest-first
-  const history = (priorMessages ?? [])
-    .reverse()
-    .map(m => {
-      const who = m.direction === 'outbound' ? 'We sent' : `${engagement.cro_name} replied`;
-      const subjectLine = m.subject ? ` (subject: ${m.subject})` : '';
-      return `[${who}${subjectLine}]\n${m.body ?? ''}`;
-    })
-    .join('\n\n---\n\n');
+  const priorMsgs = allPriorMessages ?? [];
+
+  const croName = engagement.cro_name;
+
+  // Format a message for prompt inclusion
+  function fmtMsg(m: { direction: string; subject: string | null; body: string | null }): string {
+    const who = m.direction === 'outbound' ? 'We sent' : `${croName} replied`;
+    const subjectLine = m.subject ? ` (subject: ${m.subject})` : '';
+    return `[${who}${subjectLine}]\n${(m.body ?? '').slice(0, 800)}`; // cap per-message length
+  }
+
+  let history: string;
+
+  if (priorMsgs.length > SUMMARISE_THRESHOLD) {
+    // Split: older portion to summarise + last 5 to pass verbatim
+    const older  = priorMsgs.slice(0, -5);
+    const recent = priorMsgs.slice(-5);
+
+    // Quick Claude call to summarise older messages
+    let olderSummary = `[${older.length} earlier messages in this thread]`;
+    try {
+      const olderText = older.map(fmtMsg).join('\n\n---\n\n');
+      const summaryRaw = await biotechClaude({
+        userPrompt: `Summarise these ${older.length} email messages between a biotech company and ${engagement.cro_name} in 3-4 bullet points. Focus on: what was asked, what was confirmed, what remains unresolved. Be specific.\n\n${olderText}`,
+        maxTokens:  300,
+      });
+      olderSummary = `[Summary of earlier ${older.length} messages]\n${summaryRaw.trim()}`;
+    } catch { /* fall back to count placeholder */ }
+
+    const recentText = recent.map(fmtMsg).join('\n\n---\n\n');
+    history = `${olderSummary}\n\n---\n\n${recentText}`;
+  } else {
+    // Short thread — pass all verbatim (up to MAX_CONTEXT_MESSAGES)
+    history = priorMsgs
+      .slice(-MAX_CONTEXT_MESSAGES)
+      .map(fmtMsg)
+      .join('\n\n---\n\n');
+  }
 
   // Build safe fields (same set as enquiry — no compound/MOA/indication)
   const safeFields: Record<string, string | null> = {};
@@ -159,7 +200,9 @@ export async function POST(
     });
   }
 
-  // Save the AI draft reply as a followup_draft message
+  // Save the AI draft reply as a followup_draft message.
+  // Also persist the gap analysis in ai_metadata so it can be restored on page reload
+  // and so the "resolved" toggle can track which items the user has marked done.
   const { data: draftMsg } = await supabase
     .from('engagement_messages')
     .insert({
@@ -170,15 +213,22 @@ export async function POST(
       body:          followup.draft_reply,
       status:        'draft',
       ai_generated:  true,
+      ai_metadata: {
+        gap_analysis:   followup.gap_analysis,
+        resolved_items: [] as string[],
+      },
     })
     .select('id')
     .single();
 
-  // Update stage → followup_draft
-  await supabase
-    .from('cro_engagements')
-    .update({ stage: 'followup_draft', updated_at: new Date().toISOString() })
-    .eq('id', engagementId);
+  // Only advance to followup_draft if we just moved to response_received.
+  // At meeting_done or later, preserve the current stage.
+  if (PRE_MEETING_STAGES.includes(engagement.stage) || engagement.stage === 'response_received') {
+    await supabase
+      .from('cro_engagements')
+      .update({ stage: 'followup_draft', updated_at: new Date().toISOString() })
+      .eq('id', engagementId);
+  }
 
   return NextResponse.json({
     message_id:      inboundMsg.id,

@@ -70,7 +70,10 @@ export async function POST(
   }
 
   // Build context for Claude — IP-safe fields only
-  const brief = engagement.rfp_internal_briefs as {
+  const briefRaw = Array.isArray(engagement.rfp_internal_briefs)
+    ? engagement.rfp_internal_briefs[0]
+    : engagement.rfp_internal_briefs;
+  const brief = briefRaw as {
     title: string | null;
     classification: string | null;
     extracted_data: Record<string, unknown> | null;

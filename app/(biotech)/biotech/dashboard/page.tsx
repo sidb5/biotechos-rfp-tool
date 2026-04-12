@@ -120,7 +120,7 @@ export default function BiotechDashboard() {
       ]);
 
       if (briefsRes.data)      setBriefs(briefsRes.data as Brief[]);
-      if (engagementsRes.data) setEngagements(engagementsRes.data as Engagement[]);
+      if (engagementsRes.data) setEngagements(engagementsRes.data as unknown as Engagement[]);
       setLoading(false);
     }
 

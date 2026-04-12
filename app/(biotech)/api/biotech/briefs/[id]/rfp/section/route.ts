@@ -51,15 +51,31 @@ export async function POST(
     return NextResponse.json({ error: `Invalid section key. Must be one of: ${SECTION_KEYS.join(', ')}` }, { status: 400 });
   }
 
-  // Load brief
-  const { data: brief } = await supabase
+  // Load brief — select core fields only, rfp_context_notes loaded separately
+  const { data: brief, error: briefError } = await supabase
     .from('rfp_internal_briefs')
-    .select('extracted_data, rfp_context_notes')
+    .select('extracted_data')
     .eq('id', briefId)
     .eq('user_id', user.id)
     .single();
 
-  if (!brief) return NextResponse.json({ error: 'Brief not found' }, { status: 404 });
+  if (!brief) {
+    console.error('[rfp/section] brief fetch failed:', briefError?.message);
+    return NextResponse.json({ error: 'Brief not found' }, { status: 404 });
+  }
+
+  // rfp_context_notes loaded separately — falls back to [] if column not yet migrated
+  let rfpContextNotes: { text: string; type: string; source_cro_name: string }[] = [];
+  try {
+    const { data: notesRow } = await supabase
+      .from('rfp_internal_briefs')
+      .select('rfp_context_notes')
+      .eq('id', briefId)
+      .single();
+    if (Array.isArray(notesRow?.rfp_context_notes)) {
+      rfpContextNotes = notesRow.rfp_context_notes as typeof rfpContextNotes;
+    }
+  } catch { /* column not yet migrated — proceed without notes */ }
 
   // Load existing RFP doc (for rfp_id + completeness recalc)
   const { data: rfpDoc } = await supabase
@@ -101,7 +117,7 @@ export async function POST(
     contactEmail:    settings?.sender_email        ?? '[Contact Email]',
     issueDate:       new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     extractedData:   (brief.extracted_data ?? {}) as Record<string, { value: string | null; tag: string }>,
-    rfpContextNotes: (brief.rfp_context_notes ?? []) as { text: string; type: string; source_cro_name: string }[],
+    rfpContextNotes,
     threadSummaries,
   };
 

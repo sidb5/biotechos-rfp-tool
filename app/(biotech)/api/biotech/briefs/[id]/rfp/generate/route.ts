@@ -67,14 +67,33 @@ export async function POST(
   } catch { /* no body — generate all */ }
 
   // ── Load brief ───────────────────────────────────────────────────────────────
-  const { data: brief } = await supabase
+  // Select core fields only — rfp_context_notes is loaded separately below
+  // so a missing column (migration not yet applied) doesn't block generation.
+  const { data: brief, error: briefError } = await supabase
     .from('rfp_internal_briefs')
-    .select('id, title, extracted_data, rfp_context_notes')
+    .select('id, title, extracted_data')
     .eq('id', briefId)
     .eq('user_id', user.id)
     .single();
 
-  if (!brief) return NextResponse.json({ error: 'Brief not found' }, { status: 404 });
+  if (!brief) {
+    console.error('[rfp/generate] brief fetch failed:', briefError?.message);
+    return NextResponse.json({ error: 'Brief not found' }, { status: 404 });
+  }
+
+  // Load rfp_context_notes separately — falls back to [] if column doesn't
+  // exist yet (migration 20260410000005 pending).
+  let rfpContextNotes: { text: string; type: string; source_cro_name: string }[] = [];
+  try {
+    const { data: notesRow } = await supabase
+      .from('rfp_internal_briefs')
+      .select('rfp_context_notes')
+      .eq('id', briefId)
+      .single();
+    if (Array.isArray(notesRow?.rfp_context_notes)) {
+      rfpContextNotes = notesRow.rfp_context_notes as typeof rfpContextNotes;
+    }
+  } catch { /* column not yet migrated — proceed without notes */ }
 
   // ── Load user settings ───────────────────────────────────────────────────────
   const { data: settings } = await supabase
@@ -117,7 +136,7 @@ export async function POST(
     contactEmail:    settings?.sender_email      ?? '[Contact Email]',
     issueDate,
     extractedData:   (brief.extracted_data ?? {}) as Record<string, { value: string | null; tag: string }>,
-    rfpContextNotes: (brief.rfp_context_notes ?? []) as { text: string; type: string; source_cro_name: string }[],
+    rfpContextNotes,
     threadSummaries,
   };
 
@@ -179,9 +198,19 @@ export async function POST(
         ),
       };
 
-      await supabase
+      const { error: upsertError } = await supabase
         .from('rfp_documents')
         .upsert(upsertData, { onConflict: 'brief_id' });
+
+      if (upsertError) {
+        // Most likely cause: rfp_documents table migration (20260410000006) not yet applied.
+        console.error('[rfp/generate] upsert failed:', upsertError.message);
+        await write({
+          type:  'error',
+          error: `Failed to save RFP: ${upsertError.message}. Ensure migration 20260410000006 has been applied.`,
+        });
+        return;
+      }
 
       await write({ type: 'complete', rfp_id: rfpId, completeness_score: score });
     } catch (err) {

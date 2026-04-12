@@ -92,8 +92,8 @@ export async function POST(
 
     const { data: sendData, error: sendError } = await resend.emails.send({
       from:     `${senderDisplayName} via BiotechOS <${verifiedFromEmail}>`,
-      reply_to: senderEmail,
-      to:       engagement.cro_email,
+      replyTo: senderEmail,
+      to:      engagement.cro_email,
       subject,
       html:     textToHtml(msgBody),
     });

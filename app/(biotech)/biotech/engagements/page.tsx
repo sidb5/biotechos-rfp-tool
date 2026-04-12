@@ -181,7 +181,7 @@ export default function EngagementsPage() {
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
 
-      if (data) setEngagements(data as Engagement[]);
+      if (data) setEngagements(data as unknown as Engagement[]);
       setLoading(false);
     }
     void load();
@@ -238,12 +238,11 @@ export default function EngagementsPage() {
             <tr
               key={eng.id}
               onClick={() => {
-                // meeting_done → go straight to RFP builder for this brief
-                if (['meeting_done', 'rfp_draft'].includes(eng.stage)) {
-                  router.push(`/biotech/briefs/${eng.brief_id}/rfp`);
-                } else {
-                  router.push(`/biotech/engagements/${eng.id}`);
-                }
+                // Always open the engagement thread so the user can review
+                // their full history, debrief, and checked items.
+                // The RFP builder is accessible from the brief detail page or
+                // via the "Generate RFP" action button inside the thread.
+                router.push(`/biotech/engagements/${eng.id}`);
               }}
               className={`cursor-pointer transition-colors hover:bg-gray-800/40 ${i < items.length - 1 ? 'border-b border-gray-800' : ''}`}
             >

@@ -108,16 +108,22 @@ export async function POST(
     cro_id,
     cro_name,
     cro_email,
-    include_budget = false,
-    deadline_days  = 10,
+    include_budget   = false,
+    deadline_days    = 10,
     sender_company,
+    template_only    = false,   // if true: run Claude but DO NOT save to DB — returns {subject, body} only
+    override_body,              // if provided: skip Claude, use this body directly
+    override_subject,           // if provided alongside override_body: use this subject directly
   } = body as {
-    cro_id?:         string | null;
-    cro_name?:       string;
-    cro_email?:      string;
-    include_budget?: boolean;
-    deadline_days?:  number;
-    sender_company?: string | null;
+    cro_id?:          string | null;
+    cro_name?:        string;
+    cro_email?:       string;
+    include_budget?:  boolean;
+    deadline_days?:   number;
+    sender_company?:  string | null;
+    template_only?:   boolean;
+    override_body?:   string;
+    override_subject?: string;
   };
 
   if (!cro_name || !cro_email) {
@@ -164,36 +170,50 @@ export async function POST(
     senderCompany: sender_company ?? null,
   });
 
-  // ── Call Claude ───────────────────────────────────────────────────────────
+  // ── Generate subject + body ───────────────────────────────────────────────
 
   let subject: string;
   let msgBody: string;
 
-  try {
-    const raw = await biotechClaude({ userPrompt: prompt, maxTokens: 800 });
-    const cleaned = raw
-      .replace(/^```(?:json)?\s*/m, '')
-      .replace(/\s*```\s*$/m, '')
-      .trim();
-    const parsed = JSON.parse(cleaned) as { subject?: string; body?: string };
-    if (typeof parsed.subject !== 'string' || typeof parsed.body !== 'string') {
-      throw new Error('AI response missing subject or body');
+  if (override_body && override_subject) {
+    // Caller provided final content — skip Claude entirely
+    subject = override_subject;
+    msgBody = override_body;
+  } else {
+    // Call Claude
+    try {
+      const raw = await biotechClaude({ userPrompt: prompt, maxTokens: 800 });
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*/m, '')
+        .replace(/\s*```\s*$/m, '')
+        .trim();
+      const parsed = JSON.parse(cleaned) as { subject?: string; body?: string };
+      if (typeof parsed.subject !== 'string' || typeof parsed.body !== 'string') {
+        throw new Error('AI response missing subject or body');
+      }
+      subject = parsed.subject;
+      msgBody = parsed.body;
+    } catch (err) {
+      console.error('[enquiry/generate] Claude error:', err);
+      return NextResponse.json({ error: 'Failed to generate draft — please retry' }, { status: 500 });
     }
-    subject = parsed.subject;
-    msgBody = parsed.body;
-  } catch (err) {
-    console.error('[enquiry/generate] Claude error:', err);
-    return NextResponse.json({ error: 'Failed to generate draft — please retry' }, { status: 500 });
+  }
+
+  // Template-only mode: return content without persisting anything to DB
+  if (template_only) {
+    return NextResponse.json({ subject, body: msgBody });
   }
 
   // ── Upsert engagement: find existing enquiry_draft for this brief+CRO or create ──
 
+  // Use BOTH email + name to distinguish two companies that share the same email address
   const { data: existingEng } = await supabase
     .from('cro_engagements')
     .select('id')
     .eq('brief_id', briefId)
     .eq('user_id', user.id)
     .eq('cro_email', cro_email)
+    .eq('cro_name', cro_name)
     .eq('stage', 'enquiry_draft')
     .maybeSingle();
 
