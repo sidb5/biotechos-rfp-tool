@@ -3,7 +3,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@shared/lib/supabase';
-import { FIELD_META, type ExtractedData } from '@biotech/prompts/extract-brief';
+import type { ExtractedData } from '@biotech/prompts/extract-brief';
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const SERVICE_FLAGS = [
+  { key: 'in_vitro',       label: 'In Vitro',       confidenceKey: 'in_vitro_confidence_score' },
+  { key: 'in_vivo',        label: 'In Vivo',         confidenceKey: 'in_vivo_confidence_score' },
+  { key: 'toxicology',     label: 'Toxicology',      confidenceKey: 'toxicology_confidence_score' },
+  { key: 'dmpk_adme',      label: 'DMPK / ADME',     confidenceKey: 'dmpk_adme_confidence_score' },
+  { key: 'bioanalysis',    label: 'Bioanalysis',     confidenceKey: 'bioanalysis_confidence_score' },
+  { key: 'clinical',       label: 'Clinical',        confidenceKey: 'clinical_confidence_score' },
+  { key: 'regulatory',     label: 'Regulatory',      confidenceKey: 'regulatory_confidence_score' },
+  { key: 'biostatistics',  label: 'Biostatistics',   confidenceKey: 'biostatistics_confidence_score' },
+  { key: 'genomics',       label: 'Genomics',        confidenceKey: 'genomics_confidence_score' },
+  { key: 'cell_gene',      label: 'Cell & Gene',     confidenceKey: 'cell_gene_confidence_score' },
+  { key: 'imaging',        label: 'Imaging',         confidenceKey: 'imaging_confidence_score' },
+  { key: 'cmc',            label: 'CMC',             confidenceKey: 'cmc_confidence_score' },
+  { key: 'biomarkers',     label: 'Biomarkers',      confidenceKey: 'biomarkers_confidence_score' },
+  { key: 'organoids',      label: 'Organoids',       confidenceKey: 'organoids_confidence_score' },
+] as const;
+
+type ServiceKey = typeof SERVICE_FLAGS[number]['key'];
+
+// Map brief classification → primary service flag(s)
+const CLASSIFICATION_TO_SERVICES: Record<string, ServiceKey[]> = {
+  tox:         ['toxicology'],
+  pk:          ['dmpk_adme'],
+  in_vitro:    ['in_vitro'],
+  efficacy:    ['in_vivo'],
+  combination: ['in_vitro', 'in_vivo'],
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +48,7 @@ interface CRO {
   id: string;
   name: string;
   city: string | null;
+  state: string | null;
   country: string | null;
   region: string | null;
   biosecure_compliant: boolean;
@@ -25,11 +56,49 @@ interface CRO {
   size_category: string | null;
   glp_certified: boolean;
   contact_email: string | null;
-  contact_name: string | null;
+  contact_form_url: string | null;
+  bd_key_contact: string | null;
+  services_summary: string | null;
+  employee_count: string | null;
+  // service flags
+  in_vitro: boolean | null;
+  in_vivo: boolean | null;
+  toxicology: boolean | null;
+  dmpk_adme: boolean | null;
+  bioanalysis: boolean | null;
+  clinical: boolean | null;
+  regulatory: boolean | null;
+  biostatistics: boolean | null;
+  genomics: boolean | null;
+  cell_gene: boolean | null;
+  imaging: boolean | null;
+  cmc: boolean | null;
+  biomarkers: boolean | null;
+  organoids: boolean | null;
+  // confidence scores
+  in_vitro_confidence_score: number | null;
+  in_vivo_confidence_score: number | null;
+  toxicology_confidence_score: number | null;
+  dmpk_adme_confidence_score: number | null;
+  bioanalysis_confidence_score: number | null;
+  clinical_confidence_score: number | null;
+  regulatory_confidence_score: number | null;
+  biostatistics_confidence_score: number | null;
+  genomics_confidence_score: number | null;
+  cell_gene_confidence_score: number | null;
+  imaging_confidence_score: number | null;
+  cmc_confidence_score: number | null;
+  biomarkers_confidence_score: number | null;
+  organoids_confidence_score: number | null;
+}
+
+interface CROWithScore extends CRO {
+  score: number;
+  matchedServices: ServiceKey[];
 }
 
 interface ManualEntry {
-  id: string; // client-side uuid
+  id: string;
   name: string;
   email: string;
 }
@@ -38,14 +107,27 @@ type SizeFilter = 'any' | 'small' | 'mid' | 'large';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function matchScore(cro: CRO, classification: string | null): number {
-  if (!classification || !cro.specialties?.length) return 0;
-  const cls = classification.toLowerCase();
-  const hits = cro.specialties.filter(s => {
-    const sp = s.toLowerCase();
-    return sp === cls || sp.includes(cls) || cls.includes(sp);
-  });
-  return hits.length > 0 ? Math.round((hits.length / cro.specialties.length) * 100) : 0;
+function computeMatch(cro: CRO, classification: string | null): { score: number; matchedServices: ServiceKey[] } {
+  const primaryServices = classification ? (CLASSIFICATION_TO_SERVICES[classification.toLowerCase()] ?? []) : [];
+
+  if (primaryServices.length === 0) {
+    // No classification — score based on total active services
+    const active = SERVICE_FLAGS.filter(f => cro[f.key]);
+    return { score: 0, matchedServices: active.map(f => f.key) };
+  }
+
+  // Score = average confidence score across matched primary services (0–100)
+  let total = 0;
+  const matched: ServiceKey[] = [];
+  for (const svc of primaryServices) {
+    if (cro[svc]) {
+      matched.push(svc);
+      const conf = (cro as unknown as Record<string, unknown>)[`${svc}_confidence_score`] as number | null;
+      total += conf ?? 50; // default 50 if flag is true but no score
+    }
+  }
+  const score = matched.length > 0 ? Math.round(total / primaryServices.length) : 0;
+  return { score, matchedServices: matched };
 }
 
 function isValidEmail(email: string): boolean {
@@ -56,38 +138,61 @@ function clientId(): string {
   return Math.random().toString(36).slice(2);
 }
 
+// Generic IP-safe contact form copy text
+function buildContactFormText(croName: string, classification: string | null): string {
+  const serviceHint = classification
+    ? `${classification.replace(/_/g, ' ')} studies`
+    : 'preclinical studies';
+  return `Hi,
+
+I'm reaching out to learn more about your capabilities for ${serviceHint}. We're evaluating CRO partners for an upcoming programme and would appreciate understanding your experience, capacity, and typical timelines.
+
+Could you share details on your relevant capabilities and the best contact for a follow-up discussion?
+
+Thank you`;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function BriefPage() {
-  const router = useRouter();
-  const params = useParams();
+  const router  = useRouter();
+  const params  = useParams();
   const briefId = params.id as string;
 
   // Data
-  const [brief, setBrief] = useState<Brief | null>(null);
-  const [allCROs, setAllCROs] = useState<CRO[]>([]);
-  const [sentEmails, setSentEmails] = useState<Set<string>>(new Set()); // emails already enquired
-  const [loading, setLoading] = useState(true);
+  const [brief, setBrief]       = useState<Brief | null>(null);
+  const [allCROs, setAllCROs]   = useState<CRO[]>([]);
+  const [sentEmails, setSentEmails] = useState<Set<string>>(new Set());
+  const [loading, setLoading]   = useState(true);
 
   // Filters
-  const [biosecureOnly, setBiosecureOnly] = useState(true);
-  const [glpOnly, setGlpOnly] = useState(false);
-  const [regions, setRegions] = useState<string[]>(['US', 'EU', 'UK']);
-  const [sizeFilter, setSizeFilter] = useState<SizeFilter>('any');
+  const [biosecureOnly, setBiosecureOnly]     = useState(true);
+  const [glpOnly, setGlpOnly]                 = useState(false);
+  const [regions, setRegions]                 = useState<string[]>(['US', 'EU', 'UK']);
+  const [sizeFilter, setSizeFilter]           = useState<SizeFilter>('any');
+  const [serviceFilters, setServiceFilters]   = useState<Set<ServiceKey>>(new Set());
+  const [showServiceFilters, setShowServiceFilters] = useState(false);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Manual entry fallback
-  const [manualEntries, setManualEntries] = useState<ManualEntry[]>([]);
-  const [manualName, setManualName] = useState('');
-  const [manualEmail, setManualEmail] = useState('');
+  // No-email CRO handling
+  const [emailOverrides, setEmailOverrides]   = useState<Record<string, string>>({});
+  const [contactFormCroId, setContactFormCroId] = useState<string | null>(null);
+  const [copied, setCopied]                   = useState(false);
+
+  // Manual entry
+  const [manualEntries, setManualEntries]     = useState<ManualEntry[]>([]);
+  const [manualName, setManualName]           = useState('');
+  const [manualEmail, setManualEmail]         = useState('');
   const [manualEmailError, setManualEmailError] = useState('');
 
-  // ── Load data ───────────────────────────────────────────────────────────────
+  // ── Load ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function load() {
+      const serviceColumns = SERVICE_FLAGS.flatMap(f => [f.key, f.confidenceKey]).join(', ');
+
       const [{ data: briefData }, { data: croData }, { data: engData }] = await Promise.all([
         supabase
           .from('rfp_internal_briefs')
@@ -96,9 +201,10 @@ export default function BriefPage() {
           .single(),
         supabase
           .from('cros_directory')
-          .select('id, name, city, country, region, biosecure_compliant, specialties, size_category, glp_certified, contact_email, contact_name')
+          .select(`id, name, city, state, country, region, biosecure_compliant, specialties,
+                   size_category, glp_certified, contact_email, contact_form_url, bd_key_contact,
+                   services_summary, employee_count, ${serviceColumns}`)
           .order('name'),
-        // Load existing engagements so we can mark already-contacted CROs
         supabase
           .from('cro_engagements')
           .select('cro_email, stage')
@@ -109,14 +215,14 @@ export default function BriefPage() {
       ]);
 
       if (briefData) setBrief(briefData as Brief);
-      if (croData)   setAllCROs(croData as CRO[]);
+      if (croData)   setAllCROs(croData as unknown as CRO[]);
       if (engData)   setSentEmails(new Set(engData.map(e => e.cro_email)));
       setLoading(false);
     }
     load();
   }, [briefId]);
 
-  // ── Derived: should GLP toggle be visible? ──────────────────────────────────
+  // ── GLP toggle visibility ───────────────────────────────────────────────────
 
   const showGlpToggle = useMemo(() => {
     const glp = brief?.extracted_data?.glp_requirement;
@@ -125,20 +231,35 @@ export default function BriefPage() {
 
   // ── Filtered + scored CROs ─────────────────────────────────────────────────
 
-  const filteredCROs = useMemo(() => {
-    return allCROs
+  const { filteredWithEmail, filteredNoEmail } = useMemo(() => {
+    const scored: CROWithScore[] = allCROs
       .filter(cro => {
         if (biosecureOnly && !cro.biosecure_compliant) return false;
         if (!biosecureOnly && regions.length > 0 && cro.region && !regions.includes(cro.region)) return false;
         if (glpOnly && !cro.glp_certified) return false;
         if (sizeFilter !== 'any' && cro.size_category !== sizeFilter) return false;
+        if (serviceFilters.size > 0) {
+          const croRec = cro as unknown as Record<string, unknown>;
+          const hasAll = Array.from(serviceFilters).every(svc => croRec[svc]);
+          if (!hasAll) return false;
+        }
         return true;
       })
-      .map(cro => ({ ...cro, score: matchScore(cro, brief?.classification ?? null) }))
+      .map(cro => {
+        const { score, matchedServices } = computeMatch(cro, brief?.classification ?? null);
+        return { ...cro, score, matchedServices };
+      })
       .sort((a, b) => b.score - a.score);
-  }, [allCROs, biosecureOnly, glpOnly, regions, sizeFilter, brief]);
 
-  // ── Selection handlers ─────────────────────────────────────────────────────
+    return {
+      filteredWithEmail: scored.filter(c => c.contact_email),
+      filteredNoEmail:   scored.filter(c => !c.contact_email),
+    };
+  }, [allCROs, biosecureOnly, glpOnly, regions, sizeFilter, serviceFilters, brief]);
+
+  const allFiltered = [...filteredWithEmail, ...filteredNoEmail];
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   function toggleCRO(id: string) {
     setSelectedIds(prev => {
@@ -149,21 +270,26 @@ export default function BriefPage() {
   }
 
   function selectAll() {
-    setSelectedIds(new Set(filteredCROs.map(c => c.id)));
+    setSelectedIds(new Set(allFiltered.map(c => c.id)));
   }
 
   function clearAll() {
     setSelectedIds(new Set());
   }
 
-  // ── Manual entry handlers ──────────────────────────────────────────────────
+  function toggleServiceFilter(key: ServiceKey) {
+    setServiceFilters(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   function addManualEntry() {
     setManualEmailError('');
     if (!manualEmail.trim()) { setManualEmailError('Email required'); return; }
     if (!isValidEmail(manualEmail)) { setManualEmailError('Enter a valid email address'); return; }
     if (manualEntries.length >= 20) return;
-
     const alreadyContacted = sentEmails.has(manualEmail.trim());
     setManualEntries(prev => [
       ...prev,
@@ -171,7 +297,6 @@ export default function BriefPage() {
     ]);
     setManualName('');
     setManualEmail('');
-    // Inform but don't block — user may want to resend to the same address
     if (alreadyContacted) {
       setManualEmailError('ℹ An enquiry was already sent to this address — added again for a new send');
     }
@@ -181,33 +306,40 @@ export default function BriefPage() {
     setManualEntries(prev => prev.filter(e => e.id !== id));
   }
 
+  async function handleCopyText(text: string) {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   // ── Proceed ────────────────────────────────────────────────────────────────
 
-  const totalSelected = selectedIds.size + manualEntries.length;
+  const selectedWithEmail  = filteredWithEmail.filter(c => selectedIds.has(c.id));
+  const selectedNoEmail    = filteredNoEmail.filter(c => selectedIds.has(c.id));
+  // No-email CROs only count toward total if they have an email override
+  const selectedNoEmailWithOverride = selectedNoEmail.filter(c => emailOverrides[c.id]?.trim());
+  const totalSelected = selectedWithEmail.length + selectedNoEmailWithOverride.length + manualEntries.length;
+  const noEmailSelectedCount = selectedNoEmail.length - selectedNoEmailWithOverride.length;
 
   function handleProceed() {
     if (totalSelected === 0) return;
 
-    // Gather selected CROs
-    const selectedCROs = filteredCROs.filter(c => selectedIds.has(c.id));
+    const croList = [
+      ...selectedWithEmail.map(c => ({ id: c.id, name: c.name, email: c.contact_email })),
+      ...selectedNoEmailWithOverride.map(c => ({
+        id: c.id, name: c.name, email: emailOverrides[c.id].trim(),
+      })),
+    ];
 
-    // Store selection in sessionStorage for Task 2.2 to pick up
     sessionStorage.setItem(
       `brief_${briefId}_selection`,
-      JSON.stringify({
-        cros: selectedCROs.map(c => ({
-          id: c.id,
-          name: c.name,
-          email: c.contact_email,
-        })),
-        manual: manualEntries,
-      })
+      JSON.stringify({ cros: croList, manual: manualEntries })
     );
 
     router.push(`/biotech/briefs/${briefId}/enquiry`);
   }
 
-  // ── Render: loading ────────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -224,12 +356,13 @@ export default function BriefPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500 text-sm">
         Brief not found.{' '}
-        <a href="/biotech/briefs" className="ml-2 text-blue-400 hover:underline">Back to briefs</a>
+        <a href="/biotech/briefs" className="ml-2 text-blue-600 hover:underline">Back to briefs</a>
       </div>
     );
   }
 
   const isEmptyDB = allCROs.length === 0;
+  const contactFormCro = contactFormCroId ? allCROs.find(c => c.id === contactFormCroId) ?? null : null;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
@@ -288,102 +421,38 @@ export default function BriefPage() {
         </div>
 
         {isEmptyDB ? (
+
           /* ══════════════════════════════════════════════════════════════
-             EMPTY DATABASE STATE — manual entry
+             EMPTY DATABASE — manual entry only
           ══════════════════════════════════════════════════════════════ */
           <div className="space-y-6">
             <div className="rounded-xl border border-blue-200 bg-blue-50 px-6 py-5 text-sm text-blue-700">
               <p className="font-medium mb-1">CRO database coming soon</p>
-              <p className="text-blue-600">
-                Enter CRO names and email addresses manually to proceed.
-                The platform will match against a curated CRO database in a future update.
-              </p>
+              <p className="text-blue-600">Enter CRO names and email addresses manually to proceed.</p>
             </div>
-
-            {/* Manual entry form */}
-            <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
-              <h2 className="text-sm font-medium text-gray-700">Add CROs manually</h2>
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">CRO name</label>
-                  <input
-                    type="text"
-                    value={manualName}
-                    onChange={e => setManualName(e.target.value)}
-                    placeholder="Labcorp, Covance, Charles River…"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">Contact email <span className="text-red-400">*</span></label>
-                  <input
-                    type="email"
-                    value={manualEmail}
-                    onChange={e => { setManualEmail(e.target.value); setManualEmailError(''); }}
-                    onKeyDown={e => e.key === 'Enter' && addManualEntry()}
-                    placeholder="bd@cro.com"
-                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 ${
-                      manualEmailError && !manualEmailError.startsWith('ℹ')
-                        ? 'border-red-400 focus:ring-red-400 focus:border-red-400'
-                        : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
-                    }`}
-                  />
-                  {manualEmailError && (
-                    <p className={`mt-1 text-xs ${manualEmailError.startsWith('ℹ') ? 'text-blue-600' : 'text-red-400'}`}>
-                      {manualEmailError}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={addManualEntry}
-                    disabled={manualEntries.length >= 20}
-                    className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm text-gray-700 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    + Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Added entries */}
-              {manualEntries.length > 0 && (
-                <div className="space-y-2">
-                  {manualEntries.map(entry => (
-                    <div key={entry.id} className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
-                      <div className="flex items-center gap-3">
-                        <svg className="h-3.5 w-3.5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span className="text-gray-900 font-medium">{entry.name}</span>
-                        <span className="text-gray-500">{entry.email}</span>
-                      </div>
-                      <button
-                        onClick={() => removeManualEntry(entry.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none ml-2"
-                        aria-label="Remove"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                  <p className="text-xs text-gray-500">{manualEntries.length} / 20 CROs added</p>
-                </div>
-              )}
-            </div>
+            <ManualEntryForm
+              entries={manualEntries}
+              name={manualName}
+              email={manualEmail}
+              error={manualEmailError}
+              onNameChange={setManualName}
+              onEmailChange={v => { setManualEmail(v); setManualEmailError(''); }}
+              onAdd={addManualEntry}
+              onRemove={removeManualEntry}
+            />
           </div>
 
         ) : (
+
           /* ══════════════════════════════════════════════════════════════
-             CRO DATABASE STATE — filters + cards
+             CRO DATABASE — filters + cards
           ══════════════════════════════════════════════════════════════ */
           <div className="space-y-5">
 
-            {/* Filter bar */}
+            {/* ── Filter bar ── */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
 
-              {/* Row 1: BIOSECURE toggle (prominent) */}
+              {/* Row 1: BIOSECURE + GLP + Size */}
               <div className="flex flex-wrap items-center gap-6">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <button
@@ -397,12 +466,11 @@ export default function BriefPage() {
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${biosecureOnly ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
                   <span className="text-sm font-medium text-gray-800">
-                    BIOSECURE Act compliant
+                    BIOSECURE compliant
                     <span className="ml-1.5 text-xs text-gray-500 font-normal">US / EU / UK only</span>
                   </span>
                 </label>
 
-                {/* GLP toggle — only when brief has GLP requirement */}
                 {showGlpToggle && (
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -415,7 +483,6 @@ export default function BriefPage() {
                   </label>
                 )}
 
-                {/* Size filter */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500">Size:</span>
                   {(['any', 'small', 'mid', 'large'] as SizeFilter[]).map(s => (
@@ -434,20 +501,16 @@ export default function BriefPage() {
                 </div>
               </div>
 
-              {/* Row 2: Region checkboxes — only when BIOSECURE is OFF */}
+              {/* Row 2: Region — only when BIOSECURE is OFF */}
               {!biosecureOnly && (
-                <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200">
+                <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-gray-100">
                   <span className="text-xs text-gray-500">Region:</span>
                   {['US', 'EU', 'UK', 'APAC'].map(r => (
                     <label key={r} className="flex items-center gap-1.5 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={regions.includes(r)}
-                        onChange={e => {
-                          setRegions(prev =>
-                            e.target.checked ? [...prev, r] : prev.filter(x => x !== r)
-                          );
-                        }}
+                        onChange={e => setRegions(prev => e.target.checked ? [...prev, r] : prev.filter(x => x !== r))}
                         className="h-3.5 w-3.5 rounded border-gray-300 bg-white text-blue-500 focus:ring-blue-500 focus:ring-offset-white"
                       />
                       <span className="text-sm text-gray-700">{r}</span>
@@ -455,16 +518,64 @@ export default function BriefPage() {
                   ))}
                 </div>
               )}
+
+              {/* Row 3: Service type filters — collapsible */}
+              <div className="pt-3 border-t border-gray-100">
+                <button
+                  onClick={() => setShowServiceFilters(v => !v)}
+                  className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <svg className={`h-3.5 w-3.5 transition-transform ${showServiceFilters ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                  Service type filters
+                  {serviceFilters.size > 0 && (
+                    <span className="ml-1 rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-semibold">
+                      {serviceFilters.size} active
+                    </span>
+                  )}
+                </button>
+
+                {showServiceFilters && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs text-gray-400">Show only CROs that offer ALL selected services:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {SERVICE_FLAGS.map(({ key, label }) => {
+                        const active = serviceFilters.has(key);
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => toggleServiceFilter(key)}
+                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                              active
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : 'border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {serviceFilters.size > 0 && (
+                      <button
+                        onClick={() => setServiceFilters(new Set())}
+                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        Clear service filters
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Selection controls */}
+            {/* ── Selection controls ── */}
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">
-                {filteredCROs.length} CRO{filteredCROs.length !== 1 ? 's' : ''} match
+                {allFiltered.length} CRO{allFiltered.length !== 1 ? 's' : ''} match
                 {selectedIds.size > 0 && (
-                  <span className="ml-2 font-medium text-blue-600">
-                    — {selectedIds.size} selected
-                  </span>
+                  <span className="ml-2 font-medium text-blue-600">— {selectedIds.size} selected</span>
                 )}
               </span>
               <div className="flex gap-3 text-xs">
@@ -478,115 +589,109 @@ export default function BriefPage() {
               </div>
             </div>
 
-            {/* CRO cards */}
-            {filteredCROs.length === 0 ? (
+            {/* ── CRO cards — with email ── */}
+            {filteredWithEmail.length === 0 && filteredNoEmail.length === 0 ? (
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm text-gray-500">
-                No CROs match the current filters. Try relaxing the BIOSECURE or GLP filters.
+                No CROs match the current filters. Try relaxing some filters.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {filteredCROs.map(cro => {
-                  const selected    = selectedIds.has(cro.id);
-                  const alreadySent = cro.contact_email
-                    ? sentEmails.has(cro.contact_email)
-                    : false;
+              <>
+                {filteredWithEmail.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {filteredWithEmail.map(cro => (
+                      <CROCard
+                        key={cro.id}
+                        cro={cro}
+                        selected={selectedIds.has(cro.id)}
+                        alreadySent={sentEmails.has(cro.contact_email ?? '')}
+                        onToggle={() => toggleCRO(cro.id)}
+                      />
+                    ))}
+                  </div>
+                )}
 
-                  return (
-                    <button
-                      key={cro.id}
-                      type="button"
-                      onClick={() => toggleCRO(cro.id)}
-                      className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        selected
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {/* Checkbox — always shown */}
-                          <div className={`shrink-0 h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
-                            selected ? 'bg-blue-600 border-blue-500' : 'border-gray-300'
-                          }`}>
-                            {selected && (
-                              <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </div>
-                          <span className="font-medium text-sm text-gray-900 truncate">{cro.name}</span>
-                          {/* Info badge — non-blocking, just informational */}
-                          {alreadySent && (
-                            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-600">
-                              ℹ contacted
-                            </span>
+                {/* ── No-email CROs section ── */}
+                {filteredNoEmail.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 pt-2">
+                      <div className="h-px flex-1 bg-amber-100" />
+                      <span className="text-xs font-medium text-amber-600 flex items-center gap-1.5">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                        </svg>
+                        {filteredNoEmail.length} CRO{filteredNoEmail.length !== 1 ? 's' : ''} — no email address on file
+                      </span>
+                      <div className="h-px flex-1 bg-amber-100" />
+                    </div>
+                    <p className="text-xs text-amber-600 text-center">
+                      Select any to include them — you can add an email address or use their contact form.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {filteredNoEmail.map(cro => (
+                        <div key={cro.id} className="space-y-2">
+                          <CROCard
+                            cro={cro}
+                            selected={selectedIds.has(cro.id)}
+                            alreadySent={false}
+                            noEmail
+                            onToggle={() => toggleCRO(cro.id)}
+                          />
+
+                          {/* Email override + contact form — shown when selected */}
+                          {selectedIds.has(cro.id) && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                              <p className="text-xs text-amber-700 font-medium">Choose how to contact {cro.name}:</p>
+
+                              {/* Option A: enter email */}
+                              <div className="flex gap-2">
+                                <input
+                                  type="email"
+                                  value={emailOverrides[cro.id] ?? ''}
+                                  onChange={e => setEmailOverrides(prev => ({ ...prev, [cro.id]: e.target.value }))}
+                                  placeholder="Enter email address if known"
+                                  className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+
+                              {/* Option B: contact form */}
+                              {cro.contact_form_url && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-amber-600">or</span>
+                                  <button
+                                    onClick={() => setContactFormCroId(cro.id)}
+                                    className="text-xs text-blue-600 hover:text-blue-700 underline transition-colors"
+                                  >
+                                    Copy enquiry text + open contact form →
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
-                        {/* Match score */}
-                        {(cro as any).score > 0 && (
-                          <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
-                            (cro as any).score >= 80
-                              ? 'bg-green-50 text-green-700 border border-green-200'
-                              : (cro as any).score >= 40
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-gray-100 text-gray-500 border border-gray-200'
-                          }`}>
-                            {(cro as any).score}% match
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Location */}
-                      {(cro.city || cro.country) && (
-                        <p className="text-xs text-gray-500 mb-2">
-                          {[cro.city, cro.country].filter(Boolean).join(', ')}
-                        </p>
-                      )}
-
-                      {/* Badges */}
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {cro.biosecure_compliant && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 font-medium">
-                            BIOSECURE
-                          </span>
-                        )}
-                        {cro.glp_certified && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 font-medium">
-                            GLP
-                          </span>
-                        )}
-                        {cro.size_category && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-gray-100 text-gray-500 capitalize">
-                            {cro.size_category}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Specialties */}
-                      {cro.specialties?.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {cro.specialties.map(s => (
-                            <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
         {/* ── Proceed footer ── */}
-        <div className="border-t border-gray-200 pt-6 flex items-center justify-between gap-4">
-          <p className="text-sm text-gray-500">
-            {totalSelected > 0
-              ? `${totalSelected} CRO${totalSelected !== 1 ? 's' : ''} selected — next: draft IP-safe capability enquiry`
-              : 'Select at least one CRO to proceed'}
-          </p>
+        <div className="border-t border-gray-200 pt-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-gray-500">
+              {totalSelected > 0
+                ? `${totalSelected} CRO${totalSelected !== 1 ? 's' : ''} ready to contact`
+                : 'Select at least one CRO to proceed'}
+            </p>
+            {noEmailSelectedCount > 0 && (
+              <p className="text-xs text-amber-600 mt-0.5">
+                {noEmailSelectedCount} selected CRO{noEmailSelectedCount !== 1 ? 's have' : ' has'} no email — add an address above or they will be excluded.
+              </p>
+            )}
+          </div>
           <button
             onClick={handleProceed}
             disabled={totalSelected === 0}
@@ -599,6 +704,234 @@ export default function BriefPage() {
         </div>
 
       </div>
+
+      {/* ── Contact form modal ── */}
+      {contactFormCro && (
+        <div
+          className="fixed inset-0 z-40 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setContactFormCroId(null)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-gray-200 shadow-xl w-full max-w-lg p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">{contactFormCro.name}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Copy the text below, then open their contact form and paste it in.</p>
+              </div>
+              <button
+                onClick={() => setContactFormCroId(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <textarea
+              readOnly
+              rows={8}
+              value={buildContactFormText(contactFormCro.name, brief.classification)}
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 focus:outline-none resize-none"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleCopyText(buildContactFormText(contactFormCro.name, brief.classification))}
+                className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                {copied ? '✓ Copied!' : 'Copy text'}
+              </button>
+              {contactFormCro.contact_form_url && (
+                <a
+                  href={contactFormCro.contact_form_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white text-center hover:bg-blue-500 transition-colors"
+                >
+                  Open contact form →
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function CROCard({
+  cro,
+  selected,
+  alreadySent,
+  noEmail = false,
+  onToggle,
+}: {
+  cro: CROWithScore;
+  selected: boolean;
+  alreadySent: boolean;
+  noEmail?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`text-left w-full rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        selected
+          ? 'border-blue-500 bg-blue-50'
+          : noEmail
+          ? 'border-amber-200 bg-amber-50/30 hover:border-amber-300'
+          : 'border-gray-200 bg-white hover:border-gray-300'
+      }`}
+    >
+      {/* Row 1: checkbox + name + badges */}
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`shrink-0 h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
+            selected ? 'bg-blue-600 border-blue-500' : 'border-gray-300'
+          }`}>
+            {selected && (
+              <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </div>
+          <span className="font-medium text-sm text-gray-900 truncate">{cro.name}</span>
+          {alreadySent && (
+            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-600">
+              ℹ contacted
+            </span>
+          )}
+        </div>
+        {/* Match score */}
+        {cro.score > 0 && (
+          <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+            cro.score >= 75
+              ? 'bg-green-50 text-green-700 border border-green-200'
+              : cro.score >= 40
+              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : 'bg-gray-100 text-gray-500 border border-gray-200'
+          }`}>
+            {cro.score}% match
+          </span>
+        )}
+      </div>
+
+      {/* Location + size */}
+      <p className="text-xs text-gray-500 mb-2">
+        {[cro.city, cro.state].filter(Boolean).join(', ')}
+        {cro.employee_count && <span className="ml-2 text-gray-400">· {cro.employee_count} employees</span>}
+      </p>
+
+      {/* Services summary */}
+      {cro.services_summary && (
+        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{cro.services_summary}</p>
+      )}
+
+      {/* Badges */}
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {cro.biosecure_compliant && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 font-medium">BIOSECURE</span>
+        )}
+        {cro.glp_certified && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 font-medium">GLP</span>
+        )}
+        {cro.size_category && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-gray-100 text-gray-500 capitalize">{cro.size_category}</span>
+        )}
+      </div>
+
+      {/* Matched services */}
+      {cro.matchedServices.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {cro.matchedServices.map(svc => {
+            const label = SERVICE_FLAGS.find(f => f.key === svc)?.label ?? svc;
+            return (
+              <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                ✓ {label}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function ManualEntryForm({
+  entries, name, email, error,
+  onNameChange, onEmailChange, onAdd, onRemove,
+}: {
+  entries: ManualEntry[];
+  name: string; email: string; error: string;
+  onNameChange: (v: string) => void;
+  onEmailChange: (v: string) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <h2 className="text-sm font-medium text-gray-700">Add CROs manually</h2>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex-1">
+          <label className="block text-xs text-gray-500 mb-1">CRO name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => onNameChange(e.target.value)}
+            placeholder="Labcorp, Charles River…"
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs text-gray-500 mb-1">Contact email <span className="text-red-400">*</span></label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => onEmailChange(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && onAdd()}
+            placeholder="bd@cro.com"
+            className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 ${
+              error && !error.startsWith('ℹ')
+                ? 'border-red-400 focus:ring-red-400 focus:border-red-400'
+                : 'border-gray-200 focus:ring-blue-500 focus:border-blue-500'
+            }`}
+          />
+          {error && (
+            <p className={`mt-1 text-xs ${error.startsWith('ℹ') ? 'text-blue-600' : 'text-red-500'}`}>{error}</p>
+          )}
+        </div>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={entries.length >= 20}
+            className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm text-gray-700 font-medium transition-colors disabled:opacity-40"
+          >
+            + Add
+          </button>
+        </div>
+      </div>
+      {entries.length > 0 && (
+        <div className="space-y-2">
+          {entries.map(entry => (
+            <div key={entry.id} className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
+              <div className="flex items-center gap-3">
+                <svg className="h-3.5 w-3.5 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-gray-900 font-medium">{entry.name}</span>
+                <span className="text-gray-500">{entry.email}</span>
+              </div>
+              <button onClick={() => onRemove(entry.id)} className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none ml-2">×</button>
+            </div>
+          ))}
+          <p className="text-xs text-gray-500">{entries.length} / 20 CROs added</p>
+        </div>
+      )}
     </div>
   );
 }
