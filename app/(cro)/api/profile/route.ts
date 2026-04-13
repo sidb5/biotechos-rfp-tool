@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import type { CROProfile } from '@cro/types';
 import { computeProfileScore } from '@cro/lib/profile-score';
+
+// Admin client bypasses RLS — used only for writing back to cros_directory
+function createAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 // GET /api/profile — returns the current user's profile or null
 export async function GET() {
@@ -148,7 +157,8 @@ export async function POST(request: Request) {
       organoids:      has(['organoid', 'spheroid', '3d model', 'microphysiological']),
     });
 
-    await supabase
+    // Use service role client — cros_directory has no UPDATE RLS policy
+    await createAdminClient()
       .from('cros_directory')
       .update(dirSync)
       .eq('id', savedDirectoryId);
