@@ -9,6 +9,7 @@ export interface CROProfile {
   facility_description?: string;
   accreditations?: string[];
   geographic_reach?: string;
+  cros_directory_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }

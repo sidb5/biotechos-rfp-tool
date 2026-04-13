@@ -109,6 +109,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Sync CRO-owned fields back to cros_directory if linked
+  // data is the full profile row returned by .select() — includes cros_directory_id after migration
+  const savedDirectoryId = (data as Record<string, unknown>)?.cros_directory_id as string | null | undefined;
+
+  if (savedDirectoryId) {
+    const dirSync: Record<string, unknown> = {
+      contact_email: user.email,
+      glp_certified: (profileData.accreditations ?? []).some(
+        a => a.toLowerCase().includes('glp')
+      ),
+    };
+
+    if (profileData.company_overview) {
+      dirSync.services_summary = profileData.company_overview;
+    }
+    if (profileData.therapeutic_areas?.length) {
+      dirSync.therapeutic_areas = profileData.therapeutic_areas.join(', ');
+    }
+
+    // Map assay_types to boolean service flags
+    const lower = (profileData.assay_types ?? []).map(a => a.toLowerCase());
+    const has = (kws: string[]) => kws.some(k => lower.some(a => a.includes(k)));
+    Object.assign(dirSync, {
+      in_vitro:       has(['in vitro', 'invitro', 'cell-based', 'cellular']),
+      in_vivo:        has(['in vivo', 'invivo', 'animal', 'rodent', 'mouse', 'rat']),
+      toxicology:     has(['tox', 'toxicol', 'safety pharm']),
+      dmpk_adme:      has(['dmpk', 'adme', 'pharmacokinetic', 'metabolism', 'pk study']),
+      bioanalysis:    has(['bioanalysis', 'bioanalyt', 'lc-ms', 'lcms', 'mass spec']),
+      clinical:       has(['clinical', 'phase 1', 'phase i']),
+      regulatory:     has(['regulatory']),
+      biostatistics:  has(['biostatistics', 'biostats']),
+      genomics:       has(['genomics', 'sequencing', 'ngs']),
+      cell_gene:      has(['cell therapy', 'gene therapy', 'cell & gene', 'cgt', 'aav']),
+      imaging:        has(['imaging', 'histopath', 'histology', 'microscopy', 'ihc']),
+      cmc:            has(['cmc', 'formulation', 'chemistry manufacturing']),
+      biomarkers:     has(['biomarker', 'elisa', 'msd', 'luminex', 'immunoassay']),
+      organoids:      has(['organoid', 'spheroid', '3d model', 'microphysiological']),
+    });
+
+    await supabase
+      .from('cros_directory')
+      .update(dirSync)
+      .eq('id', savedDirectoryId);
+  }
+
   return NextResponse.json({ profile: data }, { status: 200 });
 }
 

@@ -9,6 +9,14 @@ import VerifyBusiness from '@shared/components/VerifyBusiness';
 type Step = 'persona' | 'signup' | 'verify';
 type UserType = 'cro' | 'biotech';
 
+interface DirectoryMatch {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+}
+
 // Where each user type lands after completing signup
 const DASHBOARD: Record<UserType, string> = {
   cro: '/dashboard',
@@ -29,6 +37,12 @@ function SignupPageInner() {
   const [refCode, setRefCode] = useState('');
   const [croCount, setCroCount] = useState<number | null>(null);
 
+  // Domain match state (CRO signup only)
+  const [directoryMatches, setDirectoryMatches] = useState<DirectoryMatch[]>([]);
+  const [matchDismissed, setMatchDismissed] = useState(false);
+  const [linkedDirectoryId, setLinkedDirectoryId] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
+
   // Pick up ?ref=CODE
   useEffect(() => {
     const ref = searchParams.get('ref') ?? sessionStorage.getItem('referral_code') ?? '';
@@ -45,6 +59,22 @@ function SignupPageInner() {
       .then(d => setCroCount(d.count))
       .catch(() => { /* silent */ });
   }, []);
+
+  // Domain match: when CRO reaches verify step, look for directory matches by email domain
+  useEffect(() => {
+    if (step !== 'verify' || userType !== 'cro' || !email) return;
+    const domain = email.split('@')[1];
+    if (!domain) return;
+
+    supabase
+      .from('cros_directory')
+      .select('id, name, city, state, country')
+      .ilike('contact_email', `%@${domain}`)
+      .limit(3)
+      .then(({ data }) => {
+        if (data && data.length > 0) setDirectoryMatches(data as DirectoryMatch[]);
+      });
+  }, [step, userType, email]);
 
   function selectPersona(type: UserType) {
     setUserType(type);
@@ -118,6 +148,19 @@ function SignupPageInner() {
     router.refresh();
   }
 
+  async function handleLinkDirectory(id: string) {
+    setLinking(true);
+    try {
+      await fetch('/api/profile/link-directory', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cros_directory_id: id }),
+      });
+      setLinkedDirectoryId(id);
+    } catch { /* non-fatal */ }
+    setLinking(false);
+  }
+
   // ── Email confirmation sent ─────────────────────────────────────────────
 
   if (success) {
@@ -142,9 +185,62 @@ function SignupPageInner() {
   // ── Business verification (CRO only) ───────────────────────────────────
 
   if (step === 'verify') {
+    const showBanner = directoryMatches.length > 0 && !matchDismissed && !linkedDirectoryId;
+
     return (
       <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <VerifyBusiness onVerified={handleVerified} onSkip={handleSkipVerify} />
+        <div className="w-full max-w-md flex flex-col gap-4">
+          {/* Domain match banner */}
+          {showBanner && (
+            <div className="bg-white border border-green-200 rounded-xl p-4 shadow-sm">
+              <p className="text-sm font-semibold text-gray-800 mb-1">
+                We found {directoryMatches.length === 1 ? 'your company' : 'potential matches'} in our directory
+              </p>
+              <div className="flex flex-col gap-2 mt-2">
+                {directoryMatches.map(match => (
+                  <div key={match.id} className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{match.name}</p>
+                      {(match.city || match.state) && (
+                        <p className="text-xs text-gray-500">
+                          {[match.city, match.state, match.country].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    {linkedDirectoryId === match.id ? (
+                      <span className="text-xs font-medium text-green-600 shrink-0">Linked ✓</span>
+                    ) : (
+                      <button
+                        onClick={() => handleLinkDirectory(match.id)}
+                        disabled={linking}
+                        className="text-xs font-medium text-green-600 hover:text-green-700 border border-green-300 rounded-lg px-3 py-1 shrink-0 disabled:opacity-50 transition-colors"
+                      >
+                        {linking ? '…' : 'Yes, this is us'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setMatchDismissed(true)}
+                className="mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                None of these match — skip
+              </button>
+            </div>
+          )}
+
+          {linkedDirectoryId && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800 flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Linked to our CRO directory — your profile will be pre-populated.
+            </div>
+          )}
+
+          <VerifyBusiness onVerified={handleVerified} onSkip={handleSkipVerify} />
+        </div>
       </main>
     );
   }
