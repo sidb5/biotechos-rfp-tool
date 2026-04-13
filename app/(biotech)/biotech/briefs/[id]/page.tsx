@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@shared/lib/supabase';
 import type { ExtractedData } from '@biotech/prompts/extract-brief';
@@ -59,7 +59,17 @@ interface CRO {
   contact_form_url: string | null;
   bd_key_contact: string | null;
   services_summary: string | null;
+  services_full: string | null;
   employee_count: string | null;
+  notable_clients: string | null;
+  revenue_estimate: string | null;
+  phase_expertise: string | null;
+  therapeutic_areas: string | null;
+  reputation_positive: string | null;
+  website: string | null;
+  address: string | null;
+  phone: string | null;
+  entity_type: string | null;
   // service flags
   in_vitro: boolean | null;
   in_vivo: boolean | null;
@@ -204,7 +214,9 @@ export default function BriefPage() {
           .from('cros_directory')
           .select(`id, name, city, state, country, region, biosecure_compliant, specialties,
                    size_category, glp_certified, contact_email, contact_form_url, bd_key_contact,
-                   services_summary, employee_count, ${serviceColumns}`)
+                   services_summary, services_full, employee_count, notable_clients, revenue_estimate,
+                   phase_expertise, therapeutic_areas, reputation_positive, website, address, phone,
+                   entity_type, ${serviceColumns}`)
           .order('name')
           .range(0, 1999),
         supabase
@@ -830,89 +842,180 @@ function CROCard({
   noEmail?: boolean;
   onToggle: () => void;
 }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  const location = [cro.city, cro.state, cro.country].filter(Boolean).join(', ');
+
+  // All active service flags
+  const activeServices = SERVICE_FLAGS.filter(f => (cro as unknown as Record<string, unknown>)[f.key]);
+
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={`text-left w-full rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-        selected
-          ? 'border-blue-500 bg-blue-50'
-          : noEmail
-          ? 'border-amber-200 bg-amber-50/30 hover:border-amber-300'
-          : 'border-gray-200 bg-white hover:border-gray-300'
-      }`}
-    >
-      {/* Row 1: checkbox + name + badges */}
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className={`shrink-0 h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
-            selected ? 'bg-blue-600 border-blue-500' : 'border-gray-300'
-          }`}>
-            {selected && (
-              <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
+    <div className={`rounded-xl border transition-all ${
+      selected
+        ? 'border-blue-500 bg-blue-50'
+        : noEmail
+        ? 'border-orange-200 bg-white'
+        : 'border-gray-200 bg-white hover:border-gray-300'
+    }`}>
+      {/* ── Card header (always visible, click to select) ── */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="text-left w-full p-4 focus:outline-none"
+      >
+        {/* Row 1: checkbox + name + match score */}
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`shrink-0 h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
+              selected ? 'bg-blue-600 border-blue-500' : 'border-gray-300'
+            }`}>
+              {selected && (
+                <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+            <span className="font-medium text-sm text-gray-900 truncate">{cro.name}</span>
+            {alreadySent && (
+              <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-600">
+                ℹ contacted
+              </span>
+            )}
+            {noEmail && (
+              <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-orange-200 bg-orange-50 text-orange-600">
+                no email
+              </span>
             )}
           </div>
-          <span className="font-medium text-sm text-gray-900 truncate">{cro.name}</span>
-          {alreadySent && (
-            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-600">
-              ℹ contacted
+          {cro.score > 0 && (
+            <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+              cro.score >= 75
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : cro.score >= 40
+                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                : 'bg-gray-100 text-gray-500 border border-gray-200'
+            }`}>
+              {cro.score}% match
             </span>
           )}
         </div>
-        {/* Match score */}
-        {cro.score > 0 && (
-          <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
-            cro.score >= 75
-              ? 'bg-green-50 text-green-700 border border-green-200'
-              : cro.score >= 40
-              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-              : 'bg-gray-100 text-gray-500 border border-gray-200'
-          }`}>
-            {cro.score}% match
-          </span>
-        )}
-      </div>
 
-      {/* Location + size */}
-      <p className="text-xs text-gray-500 mb-2">
-        {[cro.city, cro.state].filter(Boolean).join(', ')}
-        {cro.employee_count && <span className="ml-2 text-gray-400">· {cro.employee_count} employees</span>}
-      </p>
-
-      {/* Services summary */}
-      {cro.services_summary && (
-        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{cro.services_summary}</p>
-      )}
-
-      {/* Badges */}
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {cro.biosecure_compliant && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 font-medium">BIOSECURE</span>
+        {/* Location */}
+        {location && (
+          <p className="text-xs text-gray-500 mb-2">
+            {location}
+            {cro.employee_count && <span className="ml-2 text-gray-400">· {cro.employee_count} employees</span>}
+          </p>
         )}
-        {cro.glp_certified && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 font-medium">GLP</span>
-        )}
-        {cro.size_category && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-gray-100 text-gray-500 capitalize">{cro.size_category}</span>
-        )}
-      </div>
 
-      {/* Matched services */}
-      {cro.matchedServices.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {cro.matchedServices.map(svc => {
-            const label = SERVICE_FLAGS.find(f => f.key === svc)?.label ?? svc;
-            return (
-              <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                ✓ {label}
-              </span>
-            );
-          })}
+        {/* Services summary */}
+        {cro.services_summary && (
+          <p className="text-xs text-gray-600 mb-2 line-clamp-2">{cro.services_summary}</p>
+        )}
+
+        {/* Badges */}
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {cro.biosecure_compliant && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 font-medium">BIOSECURE</span>
+          )}
+          {cro.glp_certified && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 font-medium">GLP</span>
+          )}
+          {cro.size_category && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-gray-100 text-gray-500">{cro.size_category}</span>
+          )}
+        </div>
+
+        {/* Matched services */}
+        {cro.matchedServices.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {cro.matchedServices.map(svc => {
+              const label = SERVICE_FLAGS.find(f => f.key === svc)?.label ?? svc;
+              return (
+                <span key={svc} className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                  ✓ {label}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </button>
+
+      {/* ── Expand toggle ── */}
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
+        className="w-full flex items-center justify-center gap-1 py-1.5 border-t border-gray-100 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors rounded-b-xl"
+      >
+        <svg className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
+        {expanded ? 'Less detail' : 'More detail'}
+      </button>
+
+      {/* ── Expanded detail panel ── */}
+      {expanded && (
+        <div className="px-4 pb-4 pt-2 border-t border-gray-100 space-y-3 text-xs text-gray-700">
+
+          {/* Services full */}
+          {cro.services_full && (
+            <div>
+              <p className="font-semibold text-gray-500 uppercase tracking-wide text-[10px] mb-1">Full service description</p>
+              <p className="text-gray-700 leading-relaxed whitespace-pre-line">{cro.services_full}</p>
+            </div>
+          )}
+
+          {/* All service flags */}
+          {activeServices.length > 0 && (
+            <div>
+              <p className="font-semibold text-gray-500 uppercase tracking-wide text-[10px] mb-1.5">Services offered</p>
+              <div className="flex flex-wrap gap-1.5">
+                {activeServices.map(f => (
+                  <span key={f.key} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-gray-50 text-gray-600">
+                    {f.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Grid of detail fields */}
+          <div className="grid grid-cols-1 gap-2">
+            {cro.therapeutic_areas && <DetailRow label="Therapeutic areas" value={cro.therapeutic_areas} />}
+            {cro.phase_expertise    && <DetailRow label="Phase expertise"   value={cro.phase_expertise} />}
+            {cro.notable_clients    && <DetailRow label="Notable clients"   value={cro.notable_clients} />}
+            {cro.revenue_estimate   && <DetailRow label="Revenue estimate"  value={cro.revenue_estimate} />}
+            {cro.reputation_positive && <DetailRow label="Known for"        value={cro.reputation_positive} />}
+            {cro.entity_type        && <DetailRow label="Entity type"       value={cro.entity_type} />}
+            {cro.website && (
+              <div className="flex gap-2">
+                <span className="font-medium text-gray-500 shrink-0 w-32">Website</span>
+                <a
+                  href={cro.website.startsWith('http') ? cro.website : `https://${cro.website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="text-blue-600 hover:underline truncate"
+                >
+                  {cro.website}
+                </a>
+              </div>
+            )}
+            {cro.address && <DetailRow label="Address" value={cro.address} />}
+            {cro.phone   && <DetailRow label="Phone"   value={cro.phone} />}
+          </div>
         </div>
       )}
-    </button>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <span className="font-medium text-gray-500 shrink-0 w-32">{label}</span>
+      <span className="text-gray-700">{value}</span>
+    </div>
   );
 }
 
