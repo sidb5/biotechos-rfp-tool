@@ -9,8 +9,9 @@ import ThemeToggle from '@shared/components/ThemeToggle';
 // ─── Nav structure ─────────────────────────────────────────────────────────
 
 const PRIMARY_NAV = [
-  { href: '/dashboard', label: 'Proposals' },
-  { href: '/requests',  label: 'RFP/Quote Requests'  },
+  { href: '/dashboard',      label: 'Dashboard' },
+  { href: '/requests',       label: 'Manage RFPs/Quotes'  },
+  { href: '/actions-needed', label: 'Actions Needed' },
 ];
 
 const SECONDARY_NAV = [
@@ -23,14 +24,15 @@ const ACCOUNT_NAV = [
   { href: '/profile',                label: 'Profile'       },
   { href: '/settings/billing',       label: 'Billing'       },
   { href: '/settings/referrals',     label: 'Referrals'     },
-  { href: '/settings/notifications', label: 'Notifications' },
+  { href: '/settings/notifications', label: 'Settings' },
 ];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === '/dashboard') return pathname === '/dashboard' || pathname.startsWith('/proposals/');
-  if (href === '/requests')  return pathname === '/requests' || pathname === '/rfp/new';
+  if (href === '/dashboard') return pathname === '/dashboard' || pathname.startsWith('/proposals/') || pathname.startsWith('/quote/');
+  if (href === '/requests')  return pathname === '/requests';
+  if (href === '/actions-needed') return pathname === '/actions-needed';
   return pathname.startsWith(href);
 }
 
@@ -70,9 +72,10 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
       <div className="px-4 pt-4">
         <button
           onClick={() => router.push('/rfp/new')}
-          className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+          className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors flex flex-col items-center justify-center leading-snug"
         >
-          <span className="text-base leading-none">+</span> New quote
+          <span>Create</span>
+          <span>Quote / RFP Response</span>
         </button>
       </div>
 
@@ -222,7 +225,7 @@ function MobileTabBar({ onMoreClick }: { onMoreClick: () => void }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-30 md:hidden safe-area-pb">
       <div className="flex items-center h-16">
-        {/* Proposals */}
+        {/* Dashboard */}
         <Link
           href="/dashboard"
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-xs font-medium transition-colors ${
@@ -230,22 +233,22 @@ function MobileTabBar({ onMoreClick }: { onMoreClick: () => void }) {
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive(pathname, '/dashboard') ? 2.5 : 1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive(pathname, '/dashboard') ? 2.5 : 1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
           </svg>
-          Proposals
+          Dashboard
         </Link>
 
-        {/* Requests */}
+        {/* Actions */}
         <Link
-          href="/requests"
+          href="/actions-needed"
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-xs font-medium transition-colors ${
-            isActive(pathname, '/requests') ? 'text-green-600' : 'text-gray-400'
+            isActive(pathname, '/actions-needed') ? 'text-green-600' : 'text-gray-400'
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive(pathname, '/requests') ? 2.5 : 1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive(pathname, '/actions-needed') ? 2.5 : 1.8} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
           </svg>
-          Requests
+          Actions
         </Link>
 
         {/* Centre + button */}

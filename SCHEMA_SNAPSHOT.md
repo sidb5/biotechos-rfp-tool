@@ -67,6 +67,8 @@ team_members                  jsonb
 facility_description          text
 accreditations                text[]
 geographic_reach              text
+sender_display_name           text    shown in email From field
+sender_email                  text    Reply-To on outbound quotes/proposals
 is_complete                   boolean
 logo_url                      text
 verified_domain               text

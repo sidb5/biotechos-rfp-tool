@@ -156,14 +156,14 @@ export default async function DashboardPage() {
   // ─── First-run: zero proposals ─────────────────────────────────────────────
   if (allProposals.length === 0) {
     return (
-      <AppShell title="Proposals" navInLayout>
+      <AppShell title="Dashboard" navInLayout>
         <DashboardFirstRun />
       </AppShell>
     );
   }
 
   return (
-    <AppShell title="Proposals" navInLayout>
+    <AppShell title="Dashboard" navInLayout>
       <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-6">
 
         {/* ── Referral banner ────────────────────────────────────────────── */}

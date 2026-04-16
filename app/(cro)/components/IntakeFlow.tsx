@@ -112,14 +112,14 @@ export default function IntakeFlow({ croProfileId }: IntakeFlowProps) {
   // ── File helpers ──────────────────────────────────────────────────────────
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
-    if (f) { setFile(f); setText(''); }
+    if (f) { setFile(f); }
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
     const f = e.dataTransfer.files?.[0];
-    if (f) { setFile(f); setText(''); }
+    if (f) { setFile(f); }
   }
 
   // ── Read plain-text / .eml files in the browser ───────────────────────────
@@ -328,14 +328,14 @@ export default function IntakeFlow({ croProfileId }: IntakeFlowProps) {
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-xs text-gray-400 font-medium">or</span>
+          <span className="text-xs text-gray-400 font-medium">and / or</span>
           <div className="flex-1 h-px bg-gray-200" />
         </div>
 
         {/* Textarea */}
         <textarea
           value={text}
-          onChange={e => { setText(e.target.value); if (e.target.value) setFile(null); }}
+          onChange={e => setText(e.target.value)}
           placeholder="Paste the request text here..."
           rows={8}
           className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
