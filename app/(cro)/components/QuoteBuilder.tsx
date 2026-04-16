@@ -5,6 +5,7 @@ import FeatureGate from '@shared/components/FeatureGate';
 import type { Plan } from '@shared/lib/feature-flags';
 import { canAccess } from '@shared/lib/feature-flags';
 import { supabase } from '@shared/lib/supabase';
+import { quoteSentTemplate } from '@shared/lib/email-templates';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ interface QuoteData {
 
 interface RequestSummary {
   biotech_name: string | null;
+  biotech_email: string | null;
   request_type: string | null;
   study_type: string | null;
   assay_types: string[];
@@ -571,6 +573,126 @@ function NextStepsBlock({
 
 // ─── Completeness checklist ───────────────────────────────────────────────────
 
+function SendQuoteModal({
+  biotechName, croCompanyName, scopeSummary, shareToken,
+  sendToEmail, setSendToEmail,
+  sendSubject, setSendSubject,
+  sendReplyTo, setSendReplyTo,
+  sendMessage, setSendMessage,
+  sendLoading, sendError, onSend, onClose,
+}: {
+  biotechName: string; croCompanyName: string;
+  scopeSummary: string; shareToken: string;
+  sendToEmail: string; setSendToEmail: (v: string) => void;
+  sendSubject: string; setSendSubject: (v: string) => void;
+  sendReplyTo: string; setSendReplyTo: (v: string) => void;
+  sendMessage: string; setSendMessage: (v: string) => void;
+  sendLoading: boolean; sendError: string;
+  onSend: () => void; onClose: () => void;
+}) {
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const shareUrl = `${appUrl}/q/${shareToken}`;
+  const accessCode = shareToken.slice(-6);
+  const { html: previewHtml } = quoteSentTemplate({
+    biotechName: biotechName || 'your company',
+    croCompanyName: croCompanyName || 'Our team',
+    shareUrl,
+    accessCode,
+    scopeSummary: scopeSummary || undefined,
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-4 backdrop-blur">
+      <div className="w-full max-w-3xl max-h-[90vh] rounded-2xl border border-gray-200 bg-white shadow-2xl flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Send quote</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {biotechName ? `Send your quote to ${biotechName}` : 'Email this quote to the client'}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+
+        {/* Body — scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {/* Email fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">To <span className="text-red-400">*</span></label>
+              <input
+                type="email"
+                value={sendToEmail}
+                onChange={e => setSendToEmail(e.target.value)}
+                placeholder="client@biotech.com"
+                autoFocus
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Reply-To</label>
+              <input
+                type="email"
+                value={sendReplyTo}
+                onChange={e => setSendReplyTo(e.target.value)}
+                placeholder="you@yourcro.com"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Subject</label>
+            <input
+              type="text"
+              value={sendSubject}
+              onChange={e => setSendSubject(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+            />
+          </div>
+
+          {/* Full email preview */}
+          <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Email preview — what the recipient will see</p>
+            <div className="rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+              <iframe
+                srcDoc={previewHtml}
+                title="Email preview"
+                className="w-full border-0"
+                style={{ height: '400px' }}
+                sandbox=""
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex items-center justify-between gap-3">
+          <div>
+            {sendError && <p className="text-xs text-red-600">⚠ {sendError}</p>}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onSend}
+              disabled={sendLoading}
+              className="rounded-lg bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendLoading ? 'Sending…' : 'Send quote →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Completeness({ data }: { data: QuoteData }) {
   const items = [
     { label: 'Scope filled in',    done: data.scope.trim().length > 20 },
@@ -706,25 +828,55 @@ export default function QuoteBuilder({
     } catch { /* silent */ }
   }
 
-  async function handleSend() {
+  // ── Send quote modal state ──────────────────────────────────────────────
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendToEmail, setSendToEmail] = useState('');
+  const [sendSubject, setSendSubject] = useState('');
+  const [sendReplyTo, setSendReplyTo] = useState('');
+  const [sendMessage, setSendMessage] = useState('');
+  const [sendLoading, setSendLoading] = useState(false);
+  const [sendError, setSendError] = useState('');
+
+  function openSendModal() {
+    const defaultSubject = `Quote from ${croContact.company_name || 'our team'} — ready for your review`;
+    setSendToEmail(request.biotech_email ?? '');
+    setSendSubject(defaultSubject);
+    setSendReplyTo(croContact.email ?? '');
+    setSendMessage('');
+    setSendError('');
+    setShowSendModal(true);
+  }
+
+  async function handleSendConfirm() {
+    if (!sendToEmail.trim()) { setSendError('Recipient email is required'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sendToEmail.trim())) { setSendError('Enter a valid email'); return; }
+
+    setSendLoading(true);
+    setSendError('');
     try {
       const res = await fetch('/api/quote/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ proposal_id: proposalId }),
+        body: JSON.stringify({
+          proposal_id: proposalId,
+          recipient_email: sendToEmail.trim(),
+          subject: sendSubject.trim() || undefined,
+          reply_to: sendReplyTo.trim() || undefined,
+          message: sendMessage.trim() || undefined,
+        }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
+      if (!res.ok) throw new Error(json.error ?? 'Send failed');
       setSent(true);
       setShareEnabled(true);
       setShareViews(json.share_views ?? 0);
-      const url = `${window.location.origin}/q/${json.share_token}`;
-      await navigator.clipboard.writeText(url);
-      setShareToast('Quote marked as sent — share link copied to clipboard');
+      setShowSendModal(false);
+      setShareToast(`Quote sent to ${sendToEmail.trim()}`);
       setTimeout(() => setShareToast(''), 5000);
-    } catch {
-      setShareToast('Something went wrong — please try again');
-      setTimeout(() => setShareToast(''), 3000);
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : 'Send failed — please try again');
+    } finally {
+      setSendLoading(false);
     }
   }
 
@@ -931,7 +1083,7 @@ export default function QuoteBuilder({
           <aside className="hidden md:flex w-52 shrink-0 flex-col gap-4 sticky top-24">
             {/* Primary action */}
             <button
-              onClick={handleSend}
+              onClick={openSendModal}
               className={`w-full py-3 text-white text-sm font-bold rounded-xl transition-colors ${
                 sent
                   ? 'bg-green-700 hover:bg-green-800'
@@ -1031,7 +1183,7 @@ export default function QuoteBuilder({
       {/* Mobile sticky bottom bar */}
       <div className="md:hidden fixed bottom-16 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 z-20">
         <button
-          onClick={handleSend}
+          onClick={openSendModal}
           className={`w-full py-3 text-white text-sm font-bold rounded-xl transition-colors ${
             sent ? 'bg-green-700 hover:bg-green-800' : 'bg-green-600 hover:bg-green-700'
           }`}
@@ -1042,6 +1194,28 @@ export default function QuoteBuilder({
           <p className="text-xs text-gray-400 text-center mt-1">Last saved: {relative(savedAt)}</p>
         )}
       </div>
+
+      {/* ── Send quote modal ── */}
+      {showSendModal && (
+        <SendQuoteModal
+          biotechName={request.biotech_name ?? ''}
+          croCompanyName={croContact.company_name || ''}
+          scopeSummary={data.scope || ''}
+          shareToken={shareToken ?? ''}
+          sendToEmail={sendToEmail}
+          setSendToEmail={v => { setSendToEmail(v); setSendError(''); }}
+          sendSubject={sendSubject}
+          setSendSubject={setSendSubject}
+          sendReplyTo={sendReplyTo}
+          setSendReplyTo={setSendReplyTo}
+          sendMessage={sendMessage}
+          setSendMessage={setSendMessage}
+          sendLoading={sendLoading}
+          sendError={sendError}
+          onSend={handleSendConfirm}
+          onClose={() => setShowSendModal(false)}
+        />
+      )}
     </div>
   );
 }

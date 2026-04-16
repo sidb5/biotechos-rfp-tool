@@ -11,6 +11,7 @@ Return a JSON object with EXACTLY these fields:
 
 {
   "biotech_name": "Name of the biotech or pharma company issuing the RFP",
+  "biotech_email": "Contact email address found in the RFP or request, or null if not present",
   "study_type": "One concise phrase describing the study type (e.g. 'GLP in vitro safety pharmacology panel', 'GLP 28-day rat toxicology', 'in vitro DMPK profiling')",
   "assay_types": ["array", "of", "specific", "assay", "names", "requested"],
   "species": "Species or cell systems used (e.g. 'HEK293, CHO-K1, TK6 cells' for in vitro; 'Sprague-Dawley rat' for in vivo; 'N/A - in vitro only' if no animals)",

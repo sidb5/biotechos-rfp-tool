@@ -44,7 +44,9 @@ export async function updateSession(request: NextRequest) {
   const publicRoutes = ['/', '/login', '/signup', '/auth/callback', '/admin/login'];
   const isPublic = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith('/auth/')
-  );
+  )
+    || pathname.startsWith('/q/')   // quote share links (password-protected at page level)
+    || pathname.startsWith('/p/');  // proposal share links (password-protected at page level)
 
   if (!session && !isPublic) {
     const url = request.nextUrl.clone();

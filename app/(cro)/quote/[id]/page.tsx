@@ -54,6 +54,7 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
 
   const request = {
     biotech_name:           rfp?.biotech_name ?? null,
+    biotech_email:          (parsed.biotech_email as string) ?? null,
     request_type:           (parsed.request_type as string) ?? null,
     study_type:             (parsed.study_type as string) ?? null,
     assay_types:            (parsed.assay_types as string[]) ?? [],
@@ -62,8 +63,20 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
     special_requirements:   (parsed.special_requirements as string[]) ?? [],
   };
 
+  // Try to get sender_email (column added in migration 20260415000003)
+  let senderEmail: string | undefined;
+  try {
+    const { data: se } = await supabase
+      .from('cro_profiles')
+      .select('sender_email')
+      .eq('id', profile.id)
+      .maybeSingle();
+    senderEmail = (se as Record<string, unknown> | null)?.sender_email as string | undefined;
+  } catch { /* column may not exist yet */ }
+
   const croContact = {
     company_name: profile.company_name ?? '',
+    email: senderEmail,
   };
 
   const plan = await getPlan(profile.id);
