@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import FeatureGate from '@shared/components/FeatureGate';
 import type { Plan } from '@shared/lib/feature-flags';
 import { canAccess } from '@shared/lib/feature-flags';
+import { supabase } from '@shared/lib/supabase';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -282,6 +283,82 @@ function TimelineBlock({
   );
 }
 
+interface SavedRate {
+  assay_type: string;
+  price_per_sample: number;
+}
+
+/** Combobox: free-text input with dropdown suggestions from saved rates. */
+function AssayCombobox({
+  value,
+  savedRates,
+  onChange,
+  onSelectRate,
+}: {
+  value: string;
+  savedRates: SavedRate[];
+  onChange: (val: string) => void;
+  onSelectRate: (rate: SavedRate) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filtered = useMemo(() => {
+    if (!value.trim()) return savedRates;
+    const lower = value.toLowerCase();
+    return savedRates.filter(r => r.assay_type.toLowerCase().includes(lower));
+  }, [value, savedRates]);
+
+  // Show dropdown when focused and there are suggestions
+  const showDropdown = focused && open && filtered.length > 0;
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => { setFocused(true); setOpen(true); }}
+        onBlur={() => setFocused(false)}
+        placeholder="Assay / service"
+        className="w-full border border-transparent hover:border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-green-300 focus:ring-1 focus:ring-green-300 bg-transparent"
+      />
+      {showDropdown && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+          {filtered.map(rate => (
+            <button
+              key={rate.assay_type}
+              type="button"
+              onMouseDown={e => {
+                e.preventDefault(); // Prevent blur before click registers
+                onSelectRate(rate);
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 transition-colors flex items-center justify-between gap-2"
+            >
+              <span className="text-gray-900 truncate">{rate.assay_type}</span>
+              <span className="shrink-0 text-xs text-gray-400">
+                ${rate.price_per_sample.toLocaleString('en-US')}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InvestmentBlock({
   rows,
   onChange,
@@ -295,6 +372,27 @@ function InvestmentBlock({
   const [tipDismissed, setTipDismissed] = useState(() => {
     try { return localStorage.getItem('cro_rates_tip_dismissed') === '1'; } catch { return false; }
   });
+
+  // Fetch saved rates for autocomplete
+  const [savedRates, setSavedRates] = useState<SavedRate[]>([]);
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from('cro_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!profile) return;
+      const { data: rates } = await supabase
+        .from('cro_assay_pricing')
+        .select('assay_type, price_per_sample')
+        .eq('cro_id', profile.id);
+      if (rates) setSavedRates(rates);
+    }
+    load();
+  }, []);
 
   function dismissTip() {
     setTipDismissed(true);
@@ -358,11 +456,20 @@ function InvestmentBlock({
             {rows.map((row, i) => (
               <tr key={i} className="group">
                 <td className="py-1.5 pr-2">
-                  <input
+                  <AssayCombobox
                     value={row.item}
-                    onChange={e => update(i, 'item', e.target.value)}
-                    placeholder="Assay / service"
-                    className="w-full border border-transparent hover:border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-green-300 focus:ring-1 focus:ring-green-300 bg-transparent"
+                    savedRates={savedRates}
+                    onChange={val => update(i, 'item', val)}
+                    onSelectRate={rate => {
+                      const next = rows.map((r, j) => {
+                        if (j !== i) return r;
+                        const price = `$${rate.price_per_sample.toLocaleString('en-US')}`;
+                        const updated = { ...r, item: rate.assay_type, unit_price: price, _savedRate: true };
+                        updated.total = calcTotal(r.qty, price);
+                        return updated;
+                      });
+                      onChange(next);
+                    }}
                   />
                 </td>
                 <td className="py-1.5 px-2">

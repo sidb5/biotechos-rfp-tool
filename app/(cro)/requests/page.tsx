@@ -31,7 +31,7 @@ export default async function RequestsPage() {
   const allRequests = proposals ?? [];
 
   return (
-    <AppShell title="Requests">
+    <AppShell title="Requests" navInLayout>
       <div className="max-w-3xl mx-auto px-4 py-6">
         {allRequests.length === 0 ? (
 

@@ -1,10 +1,7 @@
-import type { Metadata } from 'next';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'CRO Proposal Engine',
-  description: 'Reply to any client request in hours, not days.',
-};
+import { CRONavShell } from '@shared/components/AppShell';
 
 export default function CROLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return <CRONavShell>{children}</CRONavShell>;
 }

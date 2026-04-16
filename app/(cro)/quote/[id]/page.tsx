@@ -73,6 +73,7 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
       title={`Quote — ${rfp?.biotech_name ?? 'Draft'}`}
       backHref="/dashboard"
       backLabel="Proposals"
+      navInLayout
     >
       <QuoteBuilder
         proposalId={proposalId}

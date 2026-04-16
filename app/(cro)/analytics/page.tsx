@@ -175,7 +175,7 @@ export default async function AnalyticsPage() {
 
   if (!analyticsAllowed) {
     return (
-      <AppShell title="Analytics">
+      <AppShell title="Analytics" navInLayout>
         <FeatureGate feature="analytics" plan={plan} featureLabel="Win/loss analytics" overlay>
           <div className="max-w-5xl mx-auto px-4 py-10 flex flex-col gap-8">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -202,7 +202,7 @@ export default async function AnalyticsPage() {
 
   if (sentCount < 3) {
     return (
-      <AppShell title="Analytics">
+      <AppShell title="Analytics" navInLayout>
         <div className="max-w-5xl mx-auto px-4 py-10">
           <div className="relative">
             {/* Greyed-out analytics preview */}
@@ -263,7 +263,7 @@ export default async function AnalyticsPage() {
   }
 
   return (
-    <AppShell title="Analytics">
+    <AppShell title="Analytics" navInLayout>
       <div className="max-w-5xl mx-auto px-4 py-10 flex flex-col gap-8">
 
         {/* Summary cards */}

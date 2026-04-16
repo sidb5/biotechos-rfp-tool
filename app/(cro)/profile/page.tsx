@@ -29,7 +29,7 @@ export default async function ProfilePage({
 
   if (!showForm) {
     return (
-      <AppShell title="Profile">
+      <AppShell title="Profile" navInLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
           <div className="w-full max-w-md text-center">
             <p className="text-2xl font-bold text-gray-900 mb-3">
@@ -60,7 +60,7 @@ export default async function ProfilePage({
   }
 
   return (
-    <AppShell title="Profile">
+    <AppShell title="Profile" navInLayout>
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">

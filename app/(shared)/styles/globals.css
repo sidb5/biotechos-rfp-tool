@@ -104,16 +104,19 @@ table tbody tr:hover {
   background-color: #263044;
 }
 
-/* Inputs & textareas */
+/* Inputs & textareas — use !important to override inline bg-white / bg-transparent */
 .dark input:not([type=checkbox]):not([type=radio]),
 .dark textarea,
 .dark select {
-  background-color: #0f172a;
+  background-color: #0f172a !important;
   border-color: #3d4b63;
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
 }
 .dark input::placeholder,
 .dark textarea::placeholder { color: #475569; }
+
+/* Inline-edit display divs that use hover:bg-green-50 */
+.dark .hover\:bg-green-50:hover { background-color: #0d2818; }
 
 /* Cards / panels (explicit white backgrounds used as cards) */
 .dark .bg-green-50            { background-color: #052e16; }

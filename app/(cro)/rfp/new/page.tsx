@@ -20,7 +20,7 @@ export default async function NewRFPPage() {
   }
 
   return (
-    <AppShell title="New request">
+    <AppShell title="New request" navInLayout>
       <IntakeFlow croProfileId={profile.id} />
     </AppShell>
   );

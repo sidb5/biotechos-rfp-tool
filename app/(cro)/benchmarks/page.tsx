@@ -30,7 +30,7 @@ export default async function BenchmarksPage({ searchParams }: Props) {
 
   if (!benchmarksAllowed) {
     return (
-      <AppShell title="Benchmarks">
+      <AppShell title="Benchmarks" navInLayout>
         <div className="max-w-3xl mx-auto px-4 py-10">
           <FeatureGate feature="pricing_benchmarks" plan={plan} featureLabel="Pricing benchmarks" overlay>
             <div className="bg-white border border-gray-200 rounded-xl px-6 py-24 text-center">
@@ -68,7 +68,7 @@ export default async function BenchmarksPage({ searchParams }: Props) {
   const myNotes = myPricingRow?.price_notes ?? null;
 
   return (
-    <AppShell title="Benchmarks">
+    <AppShell title="Benchmarks" navInLayout>
       <div className="max-w-3xl mx-auto px-4 py-10">
         {allAssayTypes.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">

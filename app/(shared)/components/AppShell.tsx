@@ -282,15 +282,39 @@ interface AppShellProps {
   headerActions?: React.ReactNode;
   backHref?: string;
   backLabel?: string;
+  /** When true, skip rendering Sidebar + MobileTabBar (they live in the layout) */
+  navInLayout?: boolean;
 }
 
-export default function AppShell({ children, title, headerActions, backHref, backLabel }: AppShellProps) {
+export default function AppShell({ children, title, headerActions, backHref, backLabel, navInLayout }: AppShellProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const router = useRouter();
 
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.push('/login');
+  }
+
+  // When nav lives in the layout, only render header + content (no sidebar/mobile nav)
+  if (navInLayout) {
+    return (
+      <>
+        <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between gap-4 sticky top-0 z-10">
+          <div className="flex items-center gap-3 min-w-0">
+            {backHref && (
+              <Link href={backHref} className="text-sm text-gray-400 hover:text-gray-600 shrink-0">
+                ← {backLabel ?? 'Back'}
+              </Link>
+            )}
+            <h1 className="text-base font-bold text-gray-900 truncate">{title}</h1>
+          </div>
+          {headerActions && <div className="flex items-center gap-2 shrink-0">{headerActions}</div>}
+        </header>
+        <main className="flex-1 pb-20 md:pb-0">
+          {children}
+        </main>
+      </>
+    );
   }
 
   return (
@@ -325,6 +349,33 @@ export default function AppShell({ children, title, headerActions, backHref, bac
       <MobileTabBar onMoreClick={() => setMoreOpen(true)} />
 
       {/* Mobile more drawer */}
+      <MobileMoreDrawer
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        onSignOut={handleSignOut}
+      />
+    </div>
+  );
+}
+
+/** Standalone CRO nav shell for use in layout.tsx — renders sidebar + mobile nav only */
+export function CRONavShell({ children }: { children: React.ReactNode }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.push('/login');
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      <KeyboardShortcutN />
+      <Sidebar onSignOut={handleSignOut} />
+      <div className="flex-1 md:ml-56 flex flex-col min-h-screen">
+        {children}
+      </div>
+      <MobileTabBar onMoreClick={() => setMoreOpen(true)} />
       <MobileMoreDrawer
         open={moreOpen}
         onClose={() => setMoreOpen(false)}

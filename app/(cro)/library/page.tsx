@@ -34,7 +34,7 @@ export default async function LibraryPage() {
 
   if (!libraryAllowed) {
     return (
-      <AppShell title="Library">
+      <AppShell title="Library" navInLayout>
         <div className="max-w-4xl mx-auto px-4 py-10">
           <FeatureGate feature="content_library" plan={plan} featureLabel="Content library" overlay>
             <div className="bg-white border border-gray-200 rounded-xl px-6 py-24 text-center">
@@ -54,7 +54,7 @@ export default async function LibraryPage() {
     .order('updated_at', { ascending: false });
 
   return (
-    <AppShell title="Library">
+    <AppShell title="Library" navInLayout>
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="mb-6">
           <p className="text-sm text-gray-500">

@@ -51,6 +51,7 @@ export default async function ProposalPage({ params }: { params: { id: string } 
       backHref="/dashboard"
       backLabel="Proposals"
       headerActions={<ExportButtons proposalId={proposalId} />}
+      navInLayout
     >
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="mb-6">
