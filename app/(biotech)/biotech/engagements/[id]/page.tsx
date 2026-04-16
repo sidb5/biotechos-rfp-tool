@@ -993,7 +993,7 @@ export default function EngagementThreadPage() {
                   <div>
                     <p className="text-sm text-gray-700 font-medium mb-1">AI-draft a meeting request</p>
                     <p className="text-xs text-gray-500 leading-relaxed">
-                      Claude will write a short professional meeting request email
+                      Our AI algorithm will write a short professional meeting request email
                       with your booking link included. You can edit it before sending.
                     </p>
                   </div>

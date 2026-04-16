@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@shared/lib/supabase';
 import ThemeToggle from '@shared/components/ThemeToggle';
@@ -78,7 +79,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
       {/* Primary nav */}
       <nav className="px-3 pt-4 flex flex-col gap-0.5">
         {PRIMARY_NAV.map(({ href, label }) => (
-          <a
+          <Link
             key={href}
             href={href}
             className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -88,7 +89,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
             }`}
           >
             {label}
-          </a>
+          </Link>
         ))}
       </nav>
 
@@ -98,7 +99,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
       {/* Secondary nav */}
       <nav className="px-3 flex flex-col gap-0.5">
         {SECONDARY_NAV.map(({ href, label }) => (
-          <a
+          <Link
             key={href}
             href={href}
             className={`flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
@@ -108,14 +109,14 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
             }`}
           >
             {label}
-          </a>
+          </Link>
         ))}
       </nav>
 
       {/* Account — pinned to bottom */}
       <div className="mt-auto px-3 pb-4 border-t border-gray-100 pt-3">
         {ACCOUNT_NAV.map(({ href, label }) => (
-          <a
+          <Link
             key={href}
             href={href}
             className={`flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
@@ -125,7 +126,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
             }`}
           >
             {label}
-          </a>
+          </Link>
         ))}
         <ThemeToggle />
         <button
@@ -174,7 +175,7 @@ function MobileMoreDrawer({ open, onClose, onSignOut }: { open: boolean; onClose
         <div className="px-4 pb-24 flex flex-col gap-1">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 px-3 mb-2">Analytics</p>
           {SECONDARY_NAV.map(({ href, label }) => (
-            <a
+            <Link
               key={href}
               href={href}
               onClick={onClose}
@@ -183,13 +184,13 @@ function MobileMoreDrawer({ open, onClose, onSignOut }: { open: boolean; onClose
               }`}
             >
               {label}
-            </a>
+            </Link>
           ))}
 
           <div className="my-2 border-t border-gray-100" />
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 px-3 mb-2">Account</p>
           {ACCOUNT_NAV.map(({ href, label }) => (
-            <a
+            <Link
               key={href}
               href={href}
               onClick={onClose}
@@ -198,7 +199,7 @@ function MobileMoreDrawer({ open, onClose, onSignOut }: { open: boolean; onClose
               }`}
             >
               {label}
-            </a>
+            </Link>
           ))}
           <button
             onClick={() => { onClose(); onSignOut(); }}
@@ -222,7 +223,7 @@ function MobileTabBar({ onMoreClick }: { onMoreClick: () => void }) {
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-30 md:hidden safe-area-pb">
       <div className="flex items-center h-16">
         {/* Proposals */}
-        <a
+        <Link
           href="/dashboard"
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-xs font-medium transition-colors ${
             isActive(pathname, '/dashboard') ? 'text-green-600' : 'text-gray-400'
@@ -232,10 +233,10 @@ function MobileTabBar({ onMoreClick }: { onMoreClick: () => void }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive(pathname, '/dashboard') ? 2.5 : 1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           Proposals
-        </a>
+        </Link>
 
         {/* Requests */}
-        <a
+        <Link
           href="/requests"
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-xs font-medium transition-colors ${
             isActive(pathname, '/requests') ? 'text-green-600' : 'text-gray-400'
@@ -245,7 +246,7 @@ function MobileTabBar({ onMoreClick }: { onMoreClick: () => void }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive(pathname, '/requests') ? 2.5 : 1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
           Requests
-        </a>
+        </Link>
 
         {/* Centre + button */}
         <div className="flex-1 flex items-center justify-center">
@@ -305,9 +306,9 @@ export default function AppShell({ children, title, headerActions, backHref, bac
         <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between gap-4 sticky top-0 z-10">
           <div className="flex items-center gap-3 min-w-0">
             {backHref && (
-              <a href={backHref} className="text-sm text-gray-400 hover:text-gray-600 shrink-0">
+              <Link href={backHref} className="text-sm text-gray-400 hover:text-gray-600 shrink-0">
                 ← {backLabel ?? 'Back'}
-              </a>
+              </Link>
             )}
             <h1 className="text-base font-bold text-gray-900 truncate">{title}</h1>
           </div>

@@ -10,10 +10,15 @@
 // CRITICAL IP: compound_description and study_objective never passed to Claude.
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import { biotechClaude } from '@biotech/lib/claude';
 import { buildEnquiryPrompt, type SafeFields } from '@biotech/prompts/enquiry';
 import type { ExtractedData } from '@biotech/prompts/extract-brief';
+
+function hashExtractedData(data: unknown): string {
+  return createHash('sha256').update(JSON.stringify(data)).digest('hex');
+}
 
 // ── GET — load saved drafts ───────────────────────────────────────────────────
 
@@ -26,6 +31,14 @@ export async function GET(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const briefId = params.id;
+
+  // Fetch saved enquiry template from the brief (for reuse without re-calling Claude)
+  const { data: briefData } = await supabase
+    .from('rfp_internal_briefs')
+    .select('enquiry_template, extracted_data')
+    .eq('id', briefId)
+    .eq('user_id', user.id)
+    .single();
 
   // Fetch all enquiry_draft engagements for this brief + their latest draft message
   const { data: engagements } = await supabase
@@ -85,7 +98,11 @@ export async function GET(
     })
     .filter(Boolean);
 
-  return NextResponse.json({ drafts });
+  return NextResponse.json({
+    drafts,
+    enquiry_template: briefData?.enquiry_template ?? null,
+    extracted_data:   briefData?.extracted_data ?? null,
+  });
 }
 
 // ── POST — generate with Claude + save/overwrite draft in DB ─────────────────
@@ -199,9 +216,22 @@ export async function POST(
     }
   }
 
-  // Template-only mode: return content without persisting anything to DB
+  // Template-only mode: save template to brief for reuse, then return
   if (template_only) {
-    return NextResponse.json({ subject, body: msgBody });
+    const briefHash = hashExtractedData(ext);
+    const enquiryTemplate = {
+      subject,
+      body:         msgBody,
+      generated_at: new Date().toISOString(),
+      brief_hash:   briefHash,
+    };
+    await supabase
+      .from('rfp_internal_briefs')
+      .update({ enquiry_template: enquiryTemplate })
+      .eq('id', briefId)
+      .eq('user_id', user.id);
+
+    return NextResponse.json({ subject, body: msgBody, brief_hash: briefHash });
   }
 
   // ── Upsert engagement: find existing enquiry_draft for this brief+CRO or create ──

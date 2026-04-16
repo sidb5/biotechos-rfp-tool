@@ -2,11 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Light mode refinement ──────────────────────────────────────────────────
+   Pure white backgrounds + pale gray borders wash out in light mode.
+   Shift page bg to a cool blue-gray tint, strengthen borders, and add
+   subtle shadow to card surfaces so elements have visible definition.
+──────────────────────────────────────────────────────────────────────────── */
+
+/* Page background: cool blue-gray instead of near-white */
+.bg-gray-50             { background-color: #eef0f5; }
+
+/* Borders: stronger so cards, rows, and sections stand out */
+.border-gray-100        { border-color: #d8dce6; }
+.border-gray-200        { border-color: #c4c9d6; }
+
+/* Cards: subtle shadow for depth against tinted background */
+.bg-white {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+/* Sidebar + sticky headers: no double shadow */
+aside.bg-white,
+header.bg-white {
+  box-shadow: none;
+}
+
+/* Row hover — light mode: visible lift on any element with hover:bg-gray-50 */
+.hover\:bg-gray-50:hover {
+  background-color: #e4e7ef;
+}
+
+/* ─── Divide lines — light mode ──────────────────────────────────────────── */
+/* divide-gray-50 is used on many list/table rows — make dividers clearly visible */
+.divide-gray-50 > * + *  { border-color: #c8cdd8; }
+.divide-gray-100 > * + * { border-color: #bfc5d2; }
+.divide-gray-200 > * + * { border-color: #b3b9c8; }
+
+/* ─── Global row hover for divide-y containers ─────────────────────────────
+   Automatically add hover highlight to every direct child of a divide-y
+   list/table, so all rows across both apps get interactive feedback
+   without touching individual components.
+──────────────────────────────────────────────────────────────────────────── */
+.divide-y > li,
+.divide-y > tr,
+.divide-y > div,
+table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.divide-y > li:hover,
+.divide-y > tr:hover,
+.divide-y > div:hover,
+table tbody tr:hover {
+  background-color: #dce0eb;
+}
+
 /* ─── Dark mode overrides ────────────────────────────────────────────────────
    Since components use hardcoded Tailwind color classes, we override them
    globally under the .dark class rather than touching every component.
    Palette: slate-900/800/700 backgrounds, slate-300/400 text.
 ──────────────────────────────────────────────────────────────────────────── */
+
+/* Reset light-mode card shadow */
+.dark .bg-white               { box-shadow: none; }
 
 /* Page & layout backgrounds */
 .dark body                    { background-color: #0f172a; color: #f1f5f9; }
@@ -23,21 +80,36 @@
 .dark .text-gray-500          { color: #64748b; }
 .dark .text-gray-400          { color: #475569; }
 
-/* Borders */
-.dark .border-gray-100        { border-color: #1e293b; }
-.dark .border-gray-200        { border-color: #334155; }
-.dark .border-gray-300        { border-color: #475569; }
+/* Borders — made brighter so rows/dividers are visible against slate-800 cards */
+.dark .border-gray-100        { border-color: #2d3a4f; }
+.dark .border-gray-200        { border-color: #3d4b63; }
+.dark .border-gray-300        { border-color: #506075; }
 
-/* Divide (used in tables / lists) */
-.dark .divide-gray-100 > * + * { border-color: #1e293b; }
-.dark .divide-gray-200 > * + * { border-color: #334155; }
+/* Divide (used in tables / lists) — visible in dark mode */
+.dark .divide-gray-50 > * + *  { border-color: #2d3a4f; }
+.dark .divide-gray-100 > * + * { border-color: #2d3a4f; }
+.dark .divide-gray-200 > * + * { border-color: #3d4b63; }
+
+/* Row hover — dark mode: visible highlight for all patterns */
+.dark .hover\:bg-gray-50:hover  { background-color: #263044; }
+.dark .hover\:bg-gray-100:hover { background-color: #334155; }
+
+/* Global row hover — dark mode */
+.dark .divide-y > li:hover,
+.dark .divide-y > tr:hover,
+.dark .divide-y > div:hover {
+  background-color: #263044;
+}
+.dark table tbody tr:hover {
+  background-color: #263044;
+}
 
 /* Inputs & textareas */
 .dark input:not([type=checkbox]):not([type=radio]),
 .dark textarea,
 .dark select {
   background-color: #0f172a;
-  border-color: #334155;
+  border-color: #3d4b63;
   color: #f1f5f9;
 }
 .dark input::placeholder,
@@ -59,10 +131,6 @@
 .dark .border-green-200       { border-color: #166534; }
 .dark .border-red-200         { border-color: #7f1d1d; }
 .dark .border-amber-200       { border-color: #78350f; }
-
-/* Hover states */
-.dark .hover\:bg-gray-50:hover  { background-color: #1e293b; }
-.dark .hover\:bg-gray-100:hover { background-color: #334155; }
 
 /* Sticky header in app shell */
 .dark header.bg-white         { background-color: #1e293b; }

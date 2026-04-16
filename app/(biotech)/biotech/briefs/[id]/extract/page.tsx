@@ -142,7 +142,7 @@ export default function ExtractPage() {
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
         <p className="text-sm">Extracting structured brief…</p>
-        <p className="text-xs text-gray-400">Claude is reading your inputs. This takes 5–10 seconds.</p>
+        <p className="text-xs text-gray-400">Our AI algorithm is reading your inputs. This takes 5–10 seconds.</p>
       </div>
     );
   }
@@ -201,7 +201,7 @@ export default function ExtractPage() {
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">Review extracted brief</h1>
               <p className="mt-1 text-sm text-gray-500">
-                Claude extracted {FIELD_KEYS.length - missingCount} of {FIELD_KEYS.length} fields.
+                Our AI algorithm extracted {FIELD_KEYS.length - missingCount} of {FIELD_KEYS.length} fields.
                 Edit anything below before confirming.
               </p>
             </div>

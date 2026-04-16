@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import ThemeToggle from '@shared/components/ThemeToggle';
@@ -68,7 +69,7 @@ export default function BiotechNav() {
   const navLinks = (
     <nav className="flex flex-col gap-1 p-3">
       {NAV.map(item => (
-        <a
+        <Link
           key={item.href}
           href={item.href}
           onClick={() => setMobileOpen(false)}
@@ -82,11 +83,11 @@ export default function BiotechNav() {
             {item.icon}
           </span>
           {item.label}
-        </a>
+        </Link>
       ))}
 
       <div className="mt-auto pt-4 border-t border-gray-100 mx-1 space-y-1">
-        <a
+        <Link
           href="/biotech/briefs/new"
           className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
         >
@@ -94,7 +95,7 @@ export default function BiotechNav() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
           </svg>
           New Brief
-        </a>
+        </Link>
         <ThemeToggle className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors" />
         <button
           onClick={handleSignOut}

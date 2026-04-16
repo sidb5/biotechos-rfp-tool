@@ -1,15 +1,11 @@
 # BiotechOS — Project Intelligence
 
 ## Active build plan
-TASKS_RFP_BUILDER.md is the only active build plan.
 All files prefixed with DONE_ are completed and should be ignored entirely.
 
 ---
 
 ## OFF LIMITS — Read this first
-- app/(cro)/ is a shipped product. Never read, edit, or reference files
-  inside it unless explicitly told to. This includes all components,
-  routes, and lib files that are only used by the CRO product.
 - DONE_*.md and *_POSTPONE.md files are archived. Never read them unless explicitly asked.
 
 ---

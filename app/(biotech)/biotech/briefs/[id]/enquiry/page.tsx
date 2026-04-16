@@ -23,6 +23,20 @@ type SendTab     = 'bulk' | 'individual' | 'contactform';
 type DraftStatus = 'ready' | 'sending' | 'sent' | 'error';
 type TemplateStatus = 'idle' | 'generating' | 'ready';
 
+interface SavedTemplate {
+  subject:      string;
+  body:         string;
+  generated_at: string;
+  brief_hash:   string;
+}
+
+/** Client-side hash to match the server's SHA-256 of extracted_data */
+async function hashExtractedData(data: unknown): Promise<string> {
+  const encoded = new TextEncoder().encode(JSON.stringify(data));
+  const buf = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 interface DraftState {
   subject:       string;
   body:          string;
@@ -73,6 +87,10 @@ export default function EnquiryPage() {
   const [templateBody, setTemplateBody]       = useState('');
   const [templateStatus, setTemplateStatus]   = useState<TemplateStatus>('idle');
   const [templateError, setTemplateError]     = useState('');
+
+  // ── Template reuse + revert ───────────────────────────────────────────────
+  const [previousTemplate, setPreviousTemplate] = useState<{ subject: string; body: string } | null>(null);
+  const [briefChanged, setBriefChanged]         = useState(false);
 
   // ── Options ────────────────────────────────────────────────────────────────
   const [includeBudget, setIncludeBudget] = useState(false);
@@ -141,15 +159,34 @@ export default function EnquiryPage() {
       }
       if (settings) setUserSettings(settings);
 
-      // Load saved drafts
+      // Load saved drafts + saved template
       let savedDrafts: SavedDraft[] = [];
+      let savedTemplate: SavedTemplate | null = null;
+      let serverExtractedData: ExtractedData | null = null;
       try {
         const res = await fetch(`/api/biotech/briefs/${briefId}/enquiry`);
         if (res.ok) {
           const json = await res.json();
           savedDrafts = (json.drafts ?? []) as SavedDraft[];
+          savedTemplate = (json.enquiry_template ?? null) as SavedTemplate | null;
+          serverExtractedData = (json.extracted_data ?? null) as ExtractedData | null;
         }
       } catch { /* ignore */ }
+
+      // Restore saved template if available
+      if (savedTemplate) {
+        setTemplateSubject(savedTemplate.subject);
+        setTemplateBody(savedTemplate.body);
+        setTemplateStatus('ready');
+
+        // Check if brief has changed since the template was generated
+        if (serverExtractedData && savedTemplate.brief_hash) {
+          const currentHash = await hashExtractedData(serverExtractedData);
+          if (currentHash !== savedTemplate.brief_hash) {
+            setBriefChanged(true);
+          }
+        }
+      }
 
       const savedByKey: Record<string, SavedDraft> = {};
       for (const d of savedDrafts) savedByKey[`${d.cro_email}|${d.cro_name}`] = d;
@@ -170,6 +207,13 @@ export default function EnquiryPage() {
             engagementId: saved.engagement_id,
             messageId:    saved.message_id,
           };
+        } else if (savedTemplate && cro.email) {
+          // Pre-fill from cached template for CROs without a saved draft
+          initial[cro.id] = {
+            subject: savedTemplate.subject,
+            body:    savedTemplate.body.replace(/\{\{CRO_NAME\}\}/g, cro.name),
+            status:  'ready',
+          };
         }
       }
       setDrafts(initial);
@@ -181,8 +225,13 @@ export default function EnquiryPage() {
   // ── Generate template (single AI call) ────────────────────────────────────
 
   async function handleGenerateTemplate() {
+    // Stash current template for revert (session-only)
+    if (templateStatus === 'ready' && templateSubject && templateBody) {
+      setPreviousTemplate({ subject: templateSubject, body: templateBody });
+    }
     setTemplateStatus('generating');
     setTemplateError('');
+    setBriefChanged(false);
     try {
       const res = await fetch(`/api/biotech/briefs/${briefId}/enquiry`, {
         method:  'POST',
@@ -227,6 +276,29 @@ export default function EnquiryPage() {
       setTemplateError('Network error — please check your connection');
       setTemplateStatus('idle');
     }
+  }
+
+  function handleRevertTemplate() {
+    if (!previousTemplate) return;
+    // Stash current as the new "previous" so they can toggle back once
+    setPreviousTemplate({ subject: templateSubject, body: templateBody });
+    setTemplateSubject(previousTemplate.subject);
+    setTemplateBody(previousTemplate.body);
+
+    // Re-fill individual drafts with reverted template
+    setDrafts(prev => {
+      const next = { ...prev };
+      for (const cro of cros) {
+        if (!cro.email) continue;
+        if (next[cro.id]?.status === 'sent') continue;
+        next[cro.id] = {
+          subject: previousTemplate.subject,
+          body:    previousTemplate.body.replace(/\{\{CRO_NAME\}\}/g, cro.name),
+          status:  'ready',
+        };
+      }
+      return next;
+    });
   }
 
   // ── Individual: save + send ───────────────────────────────────────────────
@@ -482,19 +554,38 @@ export default function EnquiryPage() {
               >
                 {[5, 7, 10, 14, 20].map(d => <option key={d} value={d}>{d} day deadline</option>)}
               </select>
-              <button
-                onClick={handleGenerateTemplate}
-                disabled={templateStatus === 'generating'}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {templateStatus === 'generating'
-                  ? <span className="flex items-center gap-2"><svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Generating…</span>
-                  : templateStatus === 'ready' ? '↺ Regenerate template' : '✦ Generate template'
-                }
-              </button>
+              <div className="flex items-center gap-2">
+                {previousTemplate && templateStatus === 'ready' && (
+                  <button
+                    onClick={handleRevertTemplate}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    ← Revert
+                  </button>
+                )}
+                <button
+                  onClick={handleGenerateTemplate}
+                  disabled={templateStatus === 'generating'}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {templateStatus === 'generating'
+                    ? <span className="flex items-center gap-2"><svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Generating…</span>
+                    : templateStatus === 'ready' ? '↺ Regenerate template' : '✦ Generate template'
+                  }
+                </button>
+              </div>
             </div>
           </div>
           {templateError && <p className="mt-2 text-xs text-red-600">{templateError}</p>}
+          {briefChanged && templateStatus === 'ready' && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <span className="shrink-0 text-amber-500 mt-0.5">⚠</span>
+              <p className="text-xs text-amber-700">
+                Your study brief has changed since this template was generated.
+                Review the template and click <strong>↺ Regenerate template</strong> if your changes are material.
+              </p>
+            </div>
+          )}
           {templateStatus === 'ready' && (
             <div className="mt-4 space-y-2">
               <input

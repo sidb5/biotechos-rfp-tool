@@ -25,9 +25,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  // Use getSession() instead of getUser() for the routing decision.
+  // getSession() reads from the cookie (no network round-trip to Supabase),
+  // while getUser() makes an API call on every request (~200-500ms).
+  // Individual pages that need verified auth should call getUser() themselves.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
   const { pathname } = request.nextUrl;
 
@@ -42,7 +46,7 @@ export async function updateSession(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith('/auth/')
   );
 
-  if (!user && !isPublic) {
+  if (!session && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

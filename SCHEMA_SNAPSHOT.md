@@ -261,6 +261,7 @@ raw_inputs      jsonb       {text, docs: [{filename, text}], voice_transcript}
 extracted_data  jsonb       12-field structured object (set in Task 1.2)
 classification  text        tox | pk | efficacy | in_vitro | combination | etc
 status          text        'active' | 'archived'  default 'active'
+enquiry_template jsonb      cached outreach template: { subject, body, generated_at, brief_hash }
 created_at      timestamptz
 updated_at      timestamptz (auto-updated via trigger)
 ```
