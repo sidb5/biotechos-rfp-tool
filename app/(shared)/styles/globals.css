@@ -120,6 +120,10 @@ table tbody tr:hover {
 
 /* Cards / panels (explicit white backgrounds used as cards) */
 .dark .bg-green-50            { background-color: #052e16; }
+/* Gradient panels (e.g. profile auto-fill bar) */
+.dark .from-green-50          { --tw-gradient-from: #052e16 var(--tw-gradient-from-position); }
+.dark .to-emerald-50          { --tw-gradient-to: #042f1a var(--tw-gradient-to-position); }
+.dark .from-blue-50           { --tw-gradient-from: #0a1628 var(--tw-gradient-from-position); }
 .dark .bg-red-50              { background-color: #2d0a0a; }
 .dark .bg-amber-50            { background-color: #2d1f00; }
 .dark .bg-blue-50             { background-color: #0a1628; }
