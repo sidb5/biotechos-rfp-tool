@@ -342,3 +342,22 @@ RLS: `auth.uid() = user_id` (all operations)
 ### engagement_meetings (intended)
 Meeting notes and AI debrief output per engagement.
 
+---
+
+## Admin Portal Tables
+
+### admin_users ✓ CREATED (20260415000002_admin_portal.sql)
+Gated admin accounts. Signup creates a row with approved=false; APP_ADMINISTRATOR
+clicks an emailed approval link to activate.
+```
+id                        uuid        not null  PK
+user_id                   uuid        FK → auth.users (cascade delete), UNIQUE
+email                     text        not null, UNIQUE
+approved                  boolean     default false
+approval_token            text
+approval_token_expires_at timestamptz
+created_at                timestamptz
+updated_at                timestamptz
+```
+No RLS — admin routes use service role.
+

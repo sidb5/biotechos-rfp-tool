@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import './(shared)/styles/globals.css';
 import SentryUserProvider from '@shared/components/SentryUserProvider';
+import NavigationProgress from '@shared/components/NavigationProgress';
 
 export const metadata: Metadata = {
   title: 'CRO Proposal Engine',
@@ -23,6 +25,9 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-gray-50 text-gray-900 antialiased">
+        <Suspense fallback={null}>
+          <NavigationProgress />
+        </Suspense>
         <SentryUserProvider />
         {children}
       </body>

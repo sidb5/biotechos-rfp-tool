@@ -380,3 +380,22 @@ export function teamInviteTemplate(props: {
     `),
   };
 }
+
+// ─── Template 7 — Admin approval request ────────────────────────────────────
+
+export function adminApprovalTemplate(props: {
+  adminEmail: string;
+  token: string;
+}): { subject: string; html: string } {
+  const url = `${APP_URL}/api/admin/approve?token=${props.token}`;
+  return {
+    subject: `[BiotechOS Admin] New admin signup requires approval: ${props.adminEmail}`,
+    html: base(`
+      ${h1('New admin signup')}
+      ${p(`<strong>${props.adminEmail}</strong> has requested admin access to the BiotechOS platform.`)}
+      ${p('Click the button below to approve their account. If you do not recognise this request, ignore this email.')}
+      <div style="margin-top:8px;">${btn(url, 'Approve admin account →', '#2563eb')}</div>
+      <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">This approval link expires in 24 hours.</p>
+    `),
+  };
+}
