@@ -1,0 +1,81 @@
+{
+  "manifest_version": 3,
+  "name": "BiotechOS Quote Assistant",
+  "short_name": "BiotechOS Quote",
+  "version": "0.1.0",
+  "description": "Generate preclinical CRO quotes directly from Gmail. Detect study requests instantly and reply with a professional quote in minutes.",
+  "minimum_chrome_version": "100",
+
+  "action": {
+    "default_title": "BiotechOS Quote Assistant",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "src/common/config.js",
+        "src/common/dom-utils.js",
+        "src/content/email-detector.js",
+        "src/content/gmail-observer.js",
+        "src/content/quote-button.js",
+        "src/content/sidebar.js",
+        "src/content/compose.js",
+        "src/content/content.js"
+      ],
+      "css": [
+        "src/content/content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "cookies",
+    "clipboardWrite",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://mail.google.com/*",
+    "https://*.biotechos.com/*",
+    "https://*.vercel.app/*"
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/*",
+        "src/popup/help.html",
+        "icons/*"
+      ],
+      "matches": [
+        "https://mail.google.com/*"
+      ]
+    }
+  ]
+}
