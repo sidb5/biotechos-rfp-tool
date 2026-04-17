@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=320" />
+  <title>BiotechOS Quote Assistant</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="hdr">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">Bx</div>
+      <div class="brand-text">
+        <h1>BiotechOS</h1>
+        <p>Quote Assistant for CROs</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- First-run onboarding (hidden until JS checks storage) -->
+    <section class="card welcome-card" id="welcomeCard" hidden aria-label="Getting started">
+      <p class="welcome-heading">Welcome to BiotechOS Quote Assistant!</p>
+      <ol class="welcome-steps">
+        <li><strong>Sign in</strong> — click "Sign in to BiotechOS" below and log in with your CRO account.</li>
+        <li><strong>Open Gmail</strong> — navigate to any biotech quote request email in your inbox.</li>
+        <li><strong>Click ✦ Generate Quote</strong> — the button appears in the email action bar on relevant emails.</li>
+      </ol>
+      <button type="button" id="btnDismissWelcome" class="btn btn-primary" style="margin-top:8px;">Got it — let's go</button>
+    </section>
+
+    <section class="card" id="statusCard" aria-live="polite">
+      <div class="row">
+        <span class="dot" id="statusDot" data-state="idle" aria-hidden="true"></span>
+        <div class="row-main">
+          <div class="row-title" id="statusTitle">Checking connection…</div>
+          <div class="row-sub" id="statusSub">Contacting BiotechOS</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="profileCard" hidden>
+      <div class="row">
+        <div class="avatar" id="profileAvatar" aria-hidden="true"></div>
+        <div class="row-main">
+          <div class="row-title" id="profileCompany">—</div>
+          <div class="row-sub" id="profileEmail">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="contextCard">
+      <div class="row-title">Gmail context</div>
+      <ul class="kv">
+        <li><span>View</span><strong id="ctxView">—</strong></li>
+        <li><span>Thread</span><strong id="ctxThread">—</strong></li>
+        <li><span>Subject</span><strong id="ctxSubject" class="truncate">—</strong></li>
+      </ul>
+      <button type="button" id="btnRefreshGmail" class="btn btn-link ctx-refresh" hidden>
+        ↺ Refresh Gmail tab
+      </button>
+    </section>
+
+    <section class="actions">
+      <button type="button" id="btnLogin" class="btn btn-primary" hidden>Sign in to BiotechOS</button>
+      <button type="button" id="btnOpenApp" class="btn btn-secondary" hidden>Open BiotechOS</button>
+      <button type="button" id="btnSignOut" class="btn btn-secondary" hidden>Sign out</button>
+      <button type="button" id="btnRecheck" class="btn btn-link">Re-check connection</button>
+    </section>
+
+    <section class="settings">
+      <details>
+        <summary>Advanced settings</summary>
+        <label class="field">
+          <span>API base URL</span>
+          <input type="url" id="apiBaseInput" placeholder="http://localhost:3000" />
+        </label>
+        <button type="button" id="btnSaveApiBase" class="btn btn-link">Save</button>
+        <p class="hint" id="saveHint" aria-live="polite"></p>
+      </details>
+    </section>
+  </main>
+
+  <footer class="ftr">
+    <span>v0.1.0</span>
+    <span class="sep">·</span>
+    <a href="help.html" target="_blank" class="ftr-link">Help &amp; FAQ</a>
+  </footer>
+
+  <script src="../common/config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

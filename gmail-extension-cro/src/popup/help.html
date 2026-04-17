@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=520" />
+  <title>BiotechOS Quote Assistant — Help & FAQ</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 520px;
+      font-family: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      color: #202124;
+      background: #ffffff;
+      padding: 24px 20px 32px;
+      line-height: 1.6;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e8eaed;
+    }
+    .brand-mark {
+      width: 32px; height: 32px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #1a73e8 0%, #174ea6 100%);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .brand-text h1 { font-size: 14px; font-weight: 600; }
+    .brand-text p  { font-size: 11px; color: #5f6368; }
+
+    h2 {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1a73e8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 24px 0 10px;
+    }
+    h2:first-of-type { margin-top: 0; }
+
+    /* Quick-start steps */
+    .steps { counter-reset: step; display: flex; flex-direction: column; gap: 10px; }
+    .step {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      background: #f8f9fa;
+      border: 1px solid #e8eaed;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .step-num {
+      counter-increment: step;
+      content: counter(step);
+      min-width: 22px; height: 22px;
+      border-radius: 50%;
+      background: #1a73e8;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .step-body { font-size: 12px; }
+    .step-body strong { display: block; font-size: 13px; margin-bottom: 2px; }
+
+    /* FAQ */
+    .faq { display: flex; flex-direction: column; gap: 12px; }
+    details {
+      border: 1px solid #e8eaed;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    details[open] { background: #f8f9fa; }
+    summary {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: #202124;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: '+';
+      color: #1a73e8;
+      font-size: 16px;
+      font-weight: 400;
+      flex-shrink: 0;
+      transition: transform 150ms;
+    }
+    details[open] summary::after { content: '−'; }
+    .faq-body {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #3c4043;
+      line-height: 1.6;
+    }
+    .faq-body p { margin-bottom: 6px; }
+    .faq-body p:last-child { margin-bottom: 0; }
+    .faq-body code {
+      background: #e8eaed;
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 11px;
+      font-family: 'Roboto Mono', 'Courier New', monospace;
+    }
+
+    /* Tips */
+    .tips { display: flex; flex-direction: column; gap: 8px; }
+    .tip {
+      display: flex;
+      gap: 10px;
+      font-size: 12px;
+      color: #3c4043;
+    }
+    .tip-icon { font-size: 16px; flex-shrink: 0; }
+
+    /* Footer */
+    footer {
+      margin-top: 28px;
+      padding-top: 14px;
+      border-top: 1px solid #e8eaed;
+      font-size: 11px;
+      color: #9aa0a6;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    footer a { color: #1a73e8; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    @media (prefers-color-scheme: dark) {
+      body { background: #202124; color: #e8eaed; }
+      .brand { border-bottom-color: #3c4043; }
+      .brand-text p { color: #9aa0a6; }
+      h2 { color: #8ab4f8; }
+      .step { background: #292a2d; border-color: #3c4043; }
+      .step-body strong { color: #e8eaed; }
+      details { border-color: #3c4043; }
+      details[open] { background: #292a2d; }
+      summary { color: #e8eaed; }
+      .faq-body { color: #bdc1c6; }
+      .faq-body code { background: #3c4043; }
+      .tip { color: #bdc1c6; }
+      footer { border-top-color: #3c4043; color: #5f6368; }
+      footer a { color: #8ab4f8; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="brand">
+    <div class="brand-mark">Bx</div>
+    <div class="brand-text">
+      <h1>BiotechOS Quote Assistant</h1>
+      <p>Help &amp; FAQ</p>
+    </div>
+  </div>
+
+  <!-- ── Quick start ─────────────────────────────────────────────────── -->
+  <h2>Quick Start</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Sign in to BiotechOS</strong>
+        Open the extension popup (click the Bx icon in your Chrome toolbar) and click <em>Sign in to BiotechOS</em>. Log in with your CRO account credentials.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Open Gmail and find a quote request</strong>
+        Navigate to any email from a biotech or pharma company asking for a preclinical study quote or proposal.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Click ✦ Generate Quote</strong>
+        A sparkle button appears in the email action bar (next to Reply / Forward). Click it — the quote panel slides in from the right.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Review and edit the generated quote</strong>
+        The panel shows the parsed request, a suggested scope of work, pricing table, and proposed timeline. Edit any field directly.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>Click Reply with Quote →</strong>
+        Gmail opens a pre-filled reply with your formatted quote and a link to the online quote page. Review the email and click Send.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FAQ ────────────────────────────────────────────────────────── -->
+  <h2>Frequently Asked Questions</h2>
+  <div class="faq">
+
+    <details>
+      <summary>The ✦ Generate Quote button isn't appearing on an email</summary>
+      <div class="faq-body">
+        <p>The button only appears on emails that contain keywords associated with preclinical study requests (e.g. assay, RFP, GLP, quote, in vitro). Internal emails, newsletters, and unrelated messages are intentionally excluded.</p>
+        <p>If the button is missing on a genuine quote request, try refreshing Gmail (<code>Ctrl+Shift+R</code>) and reopening the email. Make sure you are signed in — the button is hidden when the extension is not authenticated.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>I'm signed in on the BiotechOS website but the extension shows "Not signed in"</summary>
+      <div class="faq-body">
+        <p>The extension detects your login via browser cookies. Make sure you are logged in at the same origin configured as the API base (default: <code>http://localhost:3000</code> for local dev, or your production domain).</p>
+        <p>Try clicking <em>Re-check connection</em> in the popup. If the problem persists, sign out and sign back in through the popup's <em>Sign in to BiotechOS</em> button.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>The quote generation failed with an error</summary>
+      <div class="faq-body">
+        <p>Errors usually fall into two categories:</p>
+        <p><strong>Auth error</strong> — your session expired. Click Sign in in the popup to refresh it.</p>
+        <p><strong>API error</strong> — the BiotechOS backend was unreachable. Check your internet connection and that the API base URL in Advanced settings points to the correct server.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>The reply compose window opened but the quote didn't appear in it</summary>
+      <div class="faq-body">
+        <p>This can happen if Gmail's compose overlay didn't fully render within the 5-second timeout. The extension automatically copies the quote HTML to your clipboard as a fallback — paste it into the compose window (<code>Ctrl+Shift+V</code> to paste as rich text in Gmail).</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Can I edit the quote after it's been generated?</summary>
+      <div class="faq-body">
+        <p>Yes. Every field in the side panel is editable. Click any text area or input to modify it. The pricing table lets you adjust quantities, unit prices, and descriptions — the total recalculates automatically. Use the Regenerate button at the top of the panel to generate a fresh AI draft if you want to start over.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Where is my quote saved?</summary>
+      <div class="faq-body">
+        <p>Quotes are saved to your BiotechOS account automatically when you click <em>Reply with Quote →</em>. You can view, edit, and share all past quotes from the BiotechOS web app under <em>Requests → Quotes</em>.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>How do I point the extension at a different server (staging, production)?</summary>
+      <div class="faq-body">
+        <p>Open the extension popup, expand <em>Advanced settings</em>, and enter the full origin URL (e.g. <code>https://app.biotechos.com</code>). Click Save. The extension will use this as the API base for all requests.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Does the extension read all my emails?</summary>
+      <div class="faq-body">
+        <p>No. The extension reads only the text content of the email thread that is currently open when you click <em>✦ Generate Quote</em>. It does not scan your inbox, index emails in the background, or send any email content to third parties. All AI processing goes through your BiotechOS account's own API.</p>
+      </div>
+    </details>
+
+  </div>
+
+  <!-- ── Tips ────────────────────────────────────────────────────────── -->
+  <h2>Tips &amp; Shortcuts</h2>
+  <div class="tips">
+    <div class="tip"><span class="tip-icon">⌨️</span> Press <strong>Esc</strong> to close the quote panel without losing your edits.</div>
+    <div class="tip"><span class="tip-icon">🔄</span> Click <strong>Regenerate</strong> in the panel header to get a fresh AI draft of the scope while keeping your pricing edits.</div>
+    <div class="tip"><span class="tip-icon">🔗</span> The recipient receives a link to a shareable online quote page — they don't need a BiotechOS account to view it.</div>
+    <div class="tip"><span class="tip-icon">🌙</span> The extension follows your system dark mode preference automatically.</div>
+    <div class="tip"><span class="tip-icon">📋</span> If the compose injection fails, your quote HTML is copied to the clipboard — paste with <strong>Ctrl+Shift+V</strong> in Gmail for rich-text paste.</div>
+  </div>
+
+  <footer>
+    <span>BiotechOS Quote Assistant v0.1.0</span>
+    <a href="https://biotechos.com" target="_blank">biotechos.com</a>
+    <a href="https://biotechos.com/privacy" target="_blank">Privacy Policy</a>
+    <a href="mailto:support@biotechos.com">support@biotechos.com</a>
+  </footer>
+
+</body>
+</html>

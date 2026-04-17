@@ -1,0 +1,779 @@
+/* BiotechOS Quote Assistant — injected styles.
+   Every rule is scoped to our [class^="cro-qg-"] namespace so Gmail's own
+   styles are never touched. We also reset inherited Gmail styles aggressively
+   on our top-level containers so font/line-height changes in Gmail don't leak
+   into our UI. */
+
+[class^="cro-qg-"],
+[class*=" cro-qg-"] {
+  box-sizing: border-box;
+}
+
+/* ── Status badge (bottom-right heartbeat) ──────────────────────────────── */
+.cro-qg-badge {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000; /* above Gmail, below modal dialogs we'll add later */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #ffffff;
+  color: #202124;
+  font-family: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.15),
+    0 2px 6px 2px rgba(60, 64, 67, 0.10);
+  user-select: none;
+  pointer-events: none; /* Task 1: non-interactive. Task 2 will enable it. */
+}
+
+.cro-qg-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa0a6;
+  flex-shrink: 0;
+}
+
+.cro-qg-badge-dot--idle {
+  background: #9aa0a6;
+}
+
+.cro-qg-badge-dot--active {
+  background: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.18);
+  animation: cro-qg-pulse 2s ease-in-out infinite;
+}
+
+@keyframes cro-qg-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.18); }
+  50%       { box-shadow: 0 0 0 5px rgba(26, 115, 232, 0.08); }
+}
+
+.cro-qg-badge-dot--error {
+  background: #d93025;
+}
+
+.cro-qg-badge-label {
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Generate Quote button (Task 3) ─────────────────────────────────────── */
+/* Sits inside Gmail's .ade action bar alongside Reply / Forward / More.
+   Styled to match Gmail's own text-action buttons so it feels native. */
+
+.cro-qg-quote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 32px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #1a73e8;
+  font-family: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  /* Sit to the left of Gmail's existing buttons without pushing them */
+  margin-right: 8px;
+  /* Match Gmail's vertical rhythm in the action bar */
+  vertical-align: middle;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.cro-qg-quote-btn:hover {
+  background: #f0f4fe;
+  border-color: #c3d4f8;
+  box-shadow: 0 1px 2px rgba(26, 115, 232, 0.12);
+}
+
+.cro-qg-quote-btn:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.cro-qg-quote-btn:active {
+  background: #e8f0fd;
+}
+
+.cro-qg-quote-btn:disabled,
+.cro-qg-quote-btn--loading {
+  opacity: 0.65;
+  cursor: wait;
+  pointer-events: none;
+}
+
+/* Sparkle icon — a small inline SVG injected as a CSS mask so it respects
+   the button's color in both light and dark modes. */
+.cro-qg-quote-btn-icon {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2l2.09 6.41L20.5 10l-6.41 2.09L12 18.5l-2.09-6.41L3.5 10l6.41-2.09z'/%3E%3C/svg%3E");
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2l2.09 6.41L20.5 10l-6.41 2.09L12 18.5l-2.09-6.41L3.5 10l6.41-2.09z'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+/* Loading spinner replaces the star icon while generating */
+.cro-qg-quote-btn--loading .cro-qg-quote-btn-icon {
+  mask-image: none;
+  -webkit-mask-image: none;
+  background-color: transparent;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: cro-qg-spin 0.7s linear infinite;
+}
+
+@keyframes cro-qg-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Side panel / sidebar (Task 4) ──────────────────────────────────────── */
+.cro-qg-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 400px;
+  height: 100vh;
+  background: #ffffff;
+  border-left: 1px solid #e0e0e0;
+  box-shadow: -4px 0 24px rgba(60, 64, 67, 0.15);
+  z-index: 2147483001;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #202124;
+  transform: translateX(100%);
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.cro-qg-sidebar--open {
+  transform: translateX(0);
+}
+
+/* ── Sidebar header ─────────────────────────────────────────────────────── */
+.cro-qg-sb-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8eaed;
+  flex-shrink: 0;
+  background: #f8f9fa;
+}
+
+.cro-qg-sb-title {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cro-qg-sb-close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: #5f6368;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 120ms;
+}
+.cro-qg-sb-close:hover { background: #e8eaed; color: #202124; }
+
+/* ── Scrollable body ────────────────────────────────────────────────────── */
+/* Single flex-grow wrapper that scrolls. Loading/error/loaded states all
+   render inside this wrapper so the header/footer never scroll with content. */
+.cro-qg-sb-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0; /* required for flex children to shrink correctly */
+}
+
+/* ── Skeleton loading placeholders (Task 6) ─────────────────────────────── */
+.cro-qg-sb-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.cro-qg-sb-skeleton-card {
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.cro-qg-sb-shimmer {
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: cro-qg-shimmer 1.4s ease-in-out infinite;
+}
+
+.cro-qg-sb-shimmer--title  { height: 13px; width: 60%; }
+.cro-qg-sb-shimmer--line   { height: 11px; width: 100%; }
+.cro-qg-sb-shimmer--short  { height: 11px; width: 45%; }
+.cro-qg-sb-shimmer--chip   { height: 18px; width: 72px; border-radius: 999px; }
+
+.cro-qg-sb-skeleton-chips  { display: flex; gap: 6px; }
+
+.cro-qg-sb-skeleton-msg {
+  font-size: 12px;
+  color: #9aa0a6;
+  text-align: center;
+  padding: 4px 0;
+  margin: 0;
+}
+
+/* Pastel status box shown during generation */
+.cro-qg-sb-status-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #e8f0fe;
+  border: 1px solid #c5d8f8;
+  border-radius: 10px;
+  padding: 11px 14px;
+  margin-bottom: 2px;
+}
+
+.cro-qg-sb-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1a73e8;
+  flex-shrink: 0;
+  animation: cro-qg-status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes cro-qg-status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.75); }
+}
+
+/* Step progress indicator */
+.cro-qg-sb-loading-step {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 5px 10px 12px;
+  margin: 0 0 10px;
+  position: relative;
+}
+.cro-qg-sb-loading-step::after {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+}
+.cro-qg-sb-loading-step::before {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  left: 10px;
+  height: 3px;
+  width: calc((var(--sb-step-pct, 33%)) - 20px);
+  background: #8ab4f8;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  z-index: 1;
+}
+
+@keyframes cro-qg-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Section entrance animation (Task 6) ────────────────────────────────── */
+/* Each section gets --sb-enter-i set in JS so they stagger in sequence.    */
+.cro-qg-sb-section--enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.cro-qg-sb-section--visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 220ms ease calc(var(--sb-enter-i, 0) * 60ms),
+    transform 220ms ease calc(var(--sb-enter-i, 0) * 60ms);
+}
+
+/* ── Grand total row (Task 6) ───────────────────────────────────────────── */
+.cro-qg-sb-pricing-row--total {
+  border-top: 2px solid #e8eaed;
+  margin-top: 4px;
+  padding-top: 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.cro-qg-sb-pricing-grand-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.cro-qg-sb-pricing-grand {
+  font-size: 14px;
+  font-weight: 700;
+  color: #202124;
+  text-align: right;
+}
+
+/* ── Loading state ──────────────────────────────────────────────────────── */
+.cro-qg-sb-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+  color: #5f6368;
+}
+
+.cro-qg-sb-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e8eaed;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: cro-qg-spin 0.8s linear infinite;
+}
+
+.cro-qg-sb-loading-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a56c4;
+  margin: 0;
+}
+
+/* ── Error state ────────────────────────────────────────────────────────── */
+.cro-qg-sb-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  text-align: center;
+  padding: 24px;
+}
+
+.cro-qg-sb-error-icon { font-size: 32px; }
+.cro-qg-sb-error-msg  { font-size: 13px; color: #5f6368; max-width: 280px; margin: 0; line-height: 1.5; }
+
+/* ── Summary card ───────────────────────────────────────────────────────── */
+.cro-qg-sb-card {
+  border: 1px solid #e8eaed;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cro-qg-sb-from    { font-size: 12px; color: #5f6368; }
+.cro-qg-sb-subject { font-size: 13px; font-weight: 500; line-height: 1.4; }
+.cro-qg-sb-assays  { font-size: 11px; color: #1a73e8; font-weight: 500; margin-top: 2px; }
+
+.cro-qg-sb-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cro-qg-sb-chip {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e8f0fd;
+  color: #1a73e8;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cro-qg-sb-warnings { margin-top: 6px; }
+.cro-qg-sb-warning  { font-size: 11px; color: #b06000; margin: 0; line-height: 1.4; }
+
+/* ── Content sections ───────────────────────────────────────────────────── */
+.cro-qg-sb-section { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+
+.cro-qg-sb-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #5f6368;
+  margin: 0;
+}
+
+.cro-qg-sb-section-hint { font-size: 11px; color: #9aa0a6; margin: -4px 0 0; }
+
+/* ── Textarea (scope) ───────────────────────────────────────────────────── */
+.cro-qg-sb-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  min-height: 80px;
+  color: #202124;
+  background: #fff;
+  transition: border-color 120ms;
+}
+.cro-qg-sb-textarea:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26,115,232,0.15);
+}
+
+/* ── Timeline rows ──────────────────────────────────────────────────────── */
+.cro-qg-sb-timeline { display: flex; flex-direction: column; gap: 6px; }
+
+.cro-qg-sb-tl-row {
+  display: grid;
+  grid-template-columns: 100px 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.cro-qg-sb-tl-label {
+  font-size: 12px;
+  color: #5f6368;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Inputs ─────────────────────────────────────────────────────────────── */
+.cro-qg-sb-input {
+  padding: 6px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  color: #202124;
+  background: #fff;
+  min-width: 0;
+  width: 100%;
+  transition: border-color 120ms;
+}
+.cro-qg-sb-input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.12); }
+.cro-qg-sb-input--flex  { flex: 1; }
+.cro-qg-sb-input--date  { width: 130px; flex-shrink: 0; }
+.cro-qg-sb-input--narrow { width: 62px; flex-shrink: 0; }
+
+/* ── Pricing table ──────────────────────────────────────────────────────── */
+.cro-qg-sb-pricing-table { display: flex; flex-direction: column; gap: 4px; }
+
+.cro-qg-sb-pricing-head,
+.cro-qg-sb-pricing-row {
+  display: grid;
+  grid-template-columns: 1fr 56px 72px 68px 24px;
+  gap: 4px;
+  align-items: center;
+}
+
+.cro-qg-sb-pricing-head {
+  padding: 0 2px 4px;
+  border-bottom: 1px solid #e8eaed;
+}
+.cro-qg-sb-pricing-head span {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #9aa0a6;
+  letter-spacing: 0.4px;
+}
+
+.cro-qg-sb-pricing-total {
+  font-size: 12px;
+  font-weight: 500;
+  color: #202124;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cro-qg-sb-pricing-del {
+  appearance: none;
+  background: transparent;
+  border: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  color: #9aa0a6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 120ms, background 120ms;
+}
+.cro-qg-sb-pricing-del:hover { color: #d93025; background: #fce8e6; }
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.cro-qg-sb-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+  white-space: nowrap;
+}
+
+.cro-qg-sb-btn--primary {
+  background: #1a73e8;
+  color: #fff;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.cro-qg-sb-btn--primary:hover   { background: #1765cc; }
+.cro-qg-sb-btn--primary:disabled { opacity: 0.6; cursor: wait; }
+
+.cro-qg-sb-btn--secondary {
+  background: #fff;
+  color: #1a73e8;
+  border-color: #dadce0;
+}
+.cro-qg-sb-btn--secondary:hover { background: #f1f3f4; }
+
+.cro-qg-sb-btn--ghost {
+  background: transparent;
+  color: #5f6368;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-color: transparent;
+  margin-left: auto;
+}
+.cro-qg-sb-btn--ghost:hover { background: #f1f3f4; color: #202124; }
+
+.cro-qg-sb-btn--add {
+  background: transparent;
+  border: 1px dashed #dadce0;
+  color: #1a73e8;
+  font-size: 12px;
+  width: 100%;
+  padding: 6px;
+  margin-top: 2px;
+  border-radius: 4px;
+}
+.cro-qg-sb-btn--add:hover { background: #f0f4fe; border-color: #c3d4f8; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.cro-qg-sb-footer {
+  padding: 12px 14px;
+  border-top: 1px solid #e8eaed;
+  flex-shrink: 0;
+  background: #f8f9fa;
+}
+
+/* ── Dark mode support (Gmail's dark theme sets a body class) ───────────── */
+@media (prefers-color-scheme: dark) {
+  .cro-qg-badge {
+    background: #2d2e30;
+    color: #e8eaed;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 2px 6px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .cro-qg-sidebar {
+    background: #202124;
+    color: #e8eaed;
+    border-left-color: #3c4043;
+  }
+
+  .cro-qg-sb-header, .cro-qg-sb-footer { background: #292a2d; border-color: #3c4043; }
+  .cro-qg-sb-title  { color: #e8eaed; }
+  .cro-qg-sb-close  { color: #9aa0a6; }
+  .cro-qg-sb-close:hover { background: #3c4043; color: #e8eaed; }
+
+  .cro-qg-sb-card   { background: #292a2d; border-color: #3c4043; }
+  .cro-qg-sb-chip   { background: #1e3a5f; color: #8ab4f8; }
+
+  .cro-qg-sb-section-title { color: #9aa0a6; }
+  .cro-qg-sb-textarea,
+  .cro-qg-sb-input  { background: #2d2e30; color: #e8eaed; border-color: #3c4043; }
+
+  .cro-qg-sb-pricing-head { border-bottom-color: #3c4043; }
+  .cro-qg-sb-pricing-total { color: #e8eaed; }
+
+  .cro-qg-sb-btn--primary    { background: #8ab4f8; color: #202124; }
+  .cro-qg-sb-btn--secondary  { background: #292a2d; color: #8ab4f8; border-color: #3c4043; }
+  .cro-qg-sb-btn--ghost      { color: #9aa0a6; }
+  .cro-qg-sb-btn--add        { border-color: #3c4043; color: #8ab4f8; }
+
+  .cro-qg-sb-skeleton-card  { background: #292a2d; border-color: #3c4043; }
+  .cro-qg-sb-status-box  { background: #1e3a5f; border-color: #2d4a7a; }
+  .cro-qg-sb-status-dot  { background: #8ab4f8; }
+  .cro-qg-sb-loading-text { color: #8ab4f8; }
+  .cro-qg-sb-loading-step::after { background: #3c4043; }
+  .cro-qg-sb-loading-step::before { background: #8ab4f8; }
+  .cro-qg-sb-shimmer        {
+    background: linear-gradient(90deg, #3c4043 25%, #535457 50%, #3c4043 75%);
+    background-size: 200% 100%;
+  }
+
+  .cro-qg-sb-pricing-row--total { border-top-color: #3c4043; }
+  .cro-qg-sb-pricing-grand      { color: #e8eaed; }
+  .cro-qg-sb-pricing-grand-label { color: #9aa0a6; }
+
+  .cro-qg-quote-btn {
+    background: #2d2e30;
+    color: #8ab4f8;
+    border-color: #3c4043;
+  }
+  .cro-qg-quote-btn:hover {
+    background: #1e3a5f;
+    border-color: #8ab4f8;
+  }
+}
+
+/* ── Toast notifications (Task 5) ───────────────────────────────────────── */
+.cro-qg-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 2147483002;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: #202124;
+  color: #ffffff;
+  font-family: 'Google Sans', 'Roboto', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms ease, transform 220ms ease;
+  max-width: 480px;
+  white-space: nowrap;
+}
+
+.cro-qg-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.cro-qg-toast--success { background: #1e4620; border-left: 3px solid #34a853; }
+.cro-qg-toast--error   { background: #5c1b18; border-left: 3px solid #d93025; }
+.cro-qg-toast--info    { background: #1a3a5c; border-left: 3px solid #1a73e8; }
+
+.cro-qg-toast-icon { font-size: 14px; flex-shrink: 0; }
+.cro-qg-toast-msg  { overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Responsive sidebar widths ──────────────────────────────────────────── */
+@media (max-width: 1440px) {
+  .cro-qg-sidebar { width: 380px; }
+}
+@media (max-width: 1280px) {
+  .cro-qg-sidebar { width: 340px; }
+}
+@media (max-width: 1100px) {
+  .cro-qg-sidebar { width: 320px; }
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .cro-qg-sidebar               { transition: none; }
+  .cro-qg-quote-btn             { transition: none; }
+  .cro-qg-sb-section--visible   { transition: none; }
+  .cro-qg-sb-close              { transition: none; }
+  .cro-qg-sb-btn                { transition: none; }
+  .cro-qg-toast                 { transition: none; }
+  .cro-qg-sb-spinner,
+  .cro-qg-quote-btn--loading .cro-qg-quote-btn-icon,
+  .cro-qg-sb-shimmer            { animation: none; }
+  .cro-qg-badge-dot--active     { animation: none; }
+}
+
+/* ── Windows High Contrast Mode ─────────────────────────────────────────── */
+@media (forced-colors: active) {
+  .cro-qg-badge          { border: 1px solid ButtonText; }
+  .cro-qg-quote-btn      { border-color: ButtonText; color: ButtonText; }
+  .cro-qg-sidebar        { border-left-color: ButtonText; }
+  .cro-qg-sb-close       { border: 1px solid ButtonText; }
+  .cro-qg-sb-btn--primary { background: Highlight; color: HighlightText; forced-color-adjust: none; }
+  .cro-qg-sb-chip        { border: 1px solid ButtonText; background: transparent; }
+  .cro-qg-sb-shimmer     { background: ButtonFace; animation: none; }
+  .cro-qg-toast          { background: Canvas; color: CanvasText; border: 1px solid ButtonText; }
+}
+
+/* ── Print: never show our UI in printed email views ─────────────────────── */
+@media print {
+  [class^="cro-qg-"],
+  [class*=" cro-qg-"] {
+    display: none !important;
+  }
+}
