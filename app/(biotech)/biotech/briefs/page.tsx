@@ -73,7 +73,7 @@ function CroChips({ engagements, briefId }: { engagements: CroEngagement[]; brie
   if (engagements.length === 0) {
     return (
       <div className="mt-2.5 flex items-center gap-1.5">
-        <span className="text-[11px] text-gray-400 italic">No CROs contacted yet</span>
+        <span className="text-[11px] text-gray-500 italic">No CROs contacted yet</span>
         <span className="text-[11px] text-gray-300">—</span>
         <a
           href={`/biotech/briefs/${briefId}`}
@@ -232,7 +232,7 @@ export default function BriefsListPage() {
                     <button
                       onClick={e => toggleArchive(brief, e)}
                       disabled={archiving === brief.id}
-                      className="shrink-0 text-xs text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-40 px-2 py-1"
+                      className="shrink-0 text-xs text-gray-500 hover:text-gray-600 transition-colors disabled:opacity-40 px-2 py-1"
                     >
                       Archive
                     </button>
@@ -248,7 +248,7 @@ export default function BriefsListPage() {
         {/* Archived briefs */}
         {archived.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400 pt-2">Archived</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-600 pt-2">Archived</h2>
             {archived.map(brief => (
               <div
                 key={brief.id}
@@ -258,7 +258,7 @@ export default function BriefsListPage() {
                   <span className="text-sm text-gray-600">
                     {brief.title ?? 'Untitled brief'}
                   </span>
-                  <p className="text-xs text-gray-400 mt-1">{timeAgo(brief.updated_at)}</p>
+                  <p className="text-xs text-gray-500 mt-1">{timeAgo(brief.updated_at)}</p>
                 </a>
                 <button
                   onClick={e => toggleArchive(brief, e)}

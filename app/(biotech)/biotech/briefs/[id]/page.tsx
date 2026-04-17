@@ -173,6 +173,7 @@ export default function BriefPage() {
   const [brief, setBrief]       = useState<Brief | null>(null);
   const [allCROs, setAllCROs]   = useState<CRO[]>([]);
   const [sentEmails, setSentEmails] = useState<Set<string>>(new Set());
+  const [comparableCount, setComparableCount] = useState(0);
   const [loading, setLoading]   = useState(true);
 
   // Filters
@@ -226,12 +227,15 @@ export default function BriefPage() {
           .eq('brief_id', briefId)
           .in('stage', ['enquiry_sent', 'response_received', 'followup_draft',
                         'followup_sent', 'meeting_scheduled', 'meeting_done',
-                        'rfp_draft', 'rfp_sent', 'awarded']),
+                        'rfp_draft', 'rfp_sent', 'quote_received', 'awarded']),
       ]);
 
       if (briefData) setBrief(briefData as Brief);
       if (croData)   setAllCROs(croData as unknown as CRO[]);
-      if (engData)   setSentEmails(new Set(engData.map(e => e.cro_email)));
+      if (engData) {
+        setSentEmails(new Set(engData.map(e => e.cro_email)));
+        setComparableCount(engData.filter(e => ['rfp_sent', 'quote_received'].includes(e.stage)).length);
+      }
       setLoading(false);
     }
     load();
@@ -428,6 +432,14 @@ export default function BriefPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {comparableCount >= 1 && (
+                <a
+                  href={`/biotech/briefs/${briefId}/compare`}
+                  className="flex items-center gap-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 px-3 py-1.5 text-xs font-medium transition-colors"
+                >
+                  ⚖️ Compare bids ({comparableCount})
+                </a>
+              )}
               <a
                 href={`/biotech/briefs/${briefId}/rfp`}
                 className="flex items-center gap-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 px-3 py-1.5 text-xs font-medium transition-colors"
@@ -556,7 +568,7 @@ export default function BriefPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">State:</span>
                     {stateFilter !== 'any' && (
-                      <button onClick={() => setStateFilter('any')} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                      <button onClick={() => setStateFilter('any')} className="text-xs text-gray-500 hover:text-gray-600 transition-colors">
                         Clear
                       </button>
                     )}
@@ -608,7 +620,7 @@ export default function BriefPage() {
 
                 {showServiceFilters && (
                   <div className="mt-3 space-y-2">
-                    <p className="text-xs text-gray-400">Show only CROs that offer ALL selected services:</p>
+                    <p className="text-xs text-gray-500">Show only CROs that offer ALL selected services:</p>
                     <div className="flex flex-wrap gap-2">
                       {SERVICE_FLAGS.map(({ key, label }) => {
                         const active = serviceFilters.has(key);
@@ -630,7 +642,7 @@ export default function BriefPage() {
                     {serviceFilters.size > 0 && (
                       <button
                         onClick={() => setServiceFilters(new Set())}
-                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-xs text-gray-500 hover:text-gray-600 transition-colors"
                       >
                         Clear service filters
                       </button>
@@ -657,7 +669,7 @@ export default function BriefPage() {
                   {nameFilter && (
                     <button
                       onClick={() => setNameFilter('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors"
                     >
                       ×
                     </button>
@@ -824,7 +836,7 @@ export default function BriefPage() {
               </div>
               <button
                 onClick={() => setContactFormCroId(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors text-xl leading-none"
+                className="text-gray-500 hover:text-gray-600 transition-colors text-xl leading-none"
               >
                 ×
               </button>
@@ -939,7 +951,7 @@ function CROCard({
         {location && (
           <p className="text-xs text-gray-500 mb-2">
             {location}
-            {cro.employee_count && <span className="ml-2 text-gray-400">· {cro.employee_count} employees</span>}
+            {cro.employee_count && <span className="ml-2 text-gray-500">· {cro.employee_count} employees</span>}
           </p>
         )}
 
@@ -980,7 +992,7 @@ function CROCard({
       <button
         type="button"
         onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-        className="w-full flex items-center justify-center gap-1 py-1.5 border-t border-gray-100 text-[11px] text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors rounded-b-xl"
+        className="w-full flex items-center justify-center gap-1 py-1.5 border-t border-gray-100 text-[11px] text-gray-500 hover:text-gray-600 hover:bg-gray-50 transition-colors rounded-b-xl"
       >
         <svg className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -1119,7 +1131,7 @@ function ManualEntryForm({
                 <span className="text-gray-900 font-medium">{entry.name}</span>
                 <span className="text-gray-500">{entry.email}</span>
               </div>
-              <button onClick={() => onRemove(entry.id)} className="text-gray-400 hover:text-red-500 transition-colors text-lg leading-none ml-2">×</button>
+              <button onClick={() => onRemove(entry.id)} className="text-gray-500 hover:text-red-500 transition-colors text-lg leading-none ml-2">×</button>
             </div>
           ))}
           <p className="text-xs text-gray-500">{entries.length} / 20 CROs added</p>

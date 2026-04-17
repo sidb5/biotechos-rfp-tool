@@ -117,7 +117,7 @@ function PipelineLegend({ engagements }: { engagements: Engagement[] }) {
       {/* Title row */}
       <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-3">
         Engagement pipeline
-        <span className="ml-2 font-normal normal-case text-gray-400">
+        <span className="ml-2 font-normal normal-case text-gray-500">
           {total} active CRO{total !== 1 ? 's' : ''} in flight
         </span>
       </p>
@@ -263,7 +263,7 @@ export default function EngagementsPage() {
               <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">
                 {NEXT_ACTION[eng.stage] ?? '—'}
               </td>
-              <td className="px-4 py-3 text-xs text-gray-400 text-right">{timeAgo(eng.updated_at)}</td>
+              <td className="px-4 py-3 text-xs text-gray-500 text-right">{timeAgo(eng.updated_at)}</td>
             </tr>
           ))}
         </tbody>
@@ -317,7 +317,7 @@ export default function EngagementsPage() {
             >
               {t.label}
               {t.key !== 'all' && (
-                <span className="ml-1.5 text-xs text-gray-400">
+                <span className="ml-1.5 text-xs text-gray-500">
                   {engagements.filter(e => matchesTab(e.stage, t.key)).length}
                 </span>
               )}

@@ -408,7 +408,7 @@ export default function RfpSendPage() {
             {engagements.length === 0 ? (
               <div className="px-5 py-12 text-center">
                 <p className="text-gray-500 text-sm">No eligible CROs found for this brief.</p>
-                <p className="text-gray-400 text-xs mt-1">
+                <p className="text-gray-500 text-xs mt-1">
                   CROs must have at least responded to your enquiry before receiving an RFP.
                 </p>
                 <a
@@ -462,7 +462,7 @@ export default function RfpSendPage() {
                           {STAGE_LABELS[eng.stage] ?? eng.stage}
                         </span>
                         {(eng.stage === 'rfp_sent' || eng.stage === 'awarded') && (
-                          <span className="text-[10px] text-gray-400">ℹ resend</span>
+                          <span className="text-[10px] text-gray-500">ℹ resend</span>
                         )}
                       </div>
 

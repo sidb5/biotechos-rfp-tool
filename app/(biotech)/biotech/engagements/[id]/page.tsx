@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@shared/lib/supabase';
 import type { FollowupOutput } from '@biotech/prompts/followup';
@@ -20,8 +20,6 @@ interface RfpNote {
   source_cro_name:      string;
   added_at:             string;
 }
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface GapAnalysis {
   confirmed:   string[];
@@ -48,12 +46,23 @@ interface Message {
 }
 
 interface Engagement {
-  id:       string;
-  cro_name: string;
-  cro_email:string;
-  stage:    string;
-  brief_id: string;
+  id:               string;
+  cro_name:         string;
+  cro_email:        string;
+  stage:            string;
+  brief_id:         string;
+  quoted_amount:    number | null;
+  quoted_currency:  string | null;
+  quoted_timeline:  string | null;
+  quote_valid_until: string | null;
+  quote_notes:      string | null;
   rfp_internal_briefs: { title: string | null; rfp_context_notes: RfpNote[] } | null;
+}
+
+// ── Tagged item (unified across email + meeting sources) ──────────────────────
+interface TaggedItem {
+  text:   string;
+  source: 'email' | 'meeting';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -68,6 +77,7 @@ const STAGE_LABELS: Record<string, string> = {
   meeting_done:      'Meeting done',
   rfp_draft:         'RFP draft',
   rfp_sent:          'RFP sent',
+  quote_received:    'Quote received',
   awarded:           'Awarded',
   closed:            'Closed',
 };
@@ -81,6 +91,7 @@ const STAGE_COLOR: Record<string, string> = {
   meeting_done:      'bg-purple-50 text-purple-700',
   rfp_draft:         'bg-blue-50 text-blue-700',
   rfp_sent:          'bg-indigo-50 text-indigo-700',
+  quote_received:    'bg-teal-50 text-teal-700',
   awarded:           'bg-green-50 text-green-700',
   closed:            'bg-gray-100 text-gray-500',
 };
@@ -92,49 +103,24 @@ function fmt(iso: string | null): string {
   });
 }
 
-// ── Collapsible panel used in the right sidebar ───────────────────────────────
-
-function CollapsiblePanel({
-  title,
-  badge,
-  defaultOpen = true,
-  borderClass  = 'border-gray-200',
-  bgClass      = 'bg-white',
-  titleClass   = 'text-gray-500',
-  children,
-}: {
-  title:        string;
-  badge?:       string | number;
-  defaultOpen?: boolean;
-  borderClass?: string;
-  bgClass?:     string;
-  titleClass?:  string;
-  children:     React.ReactNode;
-}) {
-  const [open, setOpen] = React.useState(defaultOpen);
+function Spinner({ color = 'blue' }: { color?: string }) {
   return (
-    <div className={`rounded-xl border ${borderClass} ${bgClass} overflow-hidden`}>
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left gap-2"
-      >
-        <span className={`text-[11px] font-semibold uppercase tracking-widest ${titleClass}`}>
-          {title}
-        </span>
-        <div className="flex items-center gap-2 shrink-0">
-          {badge !== undefined && (
-            <span className="text-[10px] text-gray-400 font-normal">({badge})</span>
-          )}
-          <svg
-            className={`h-3 w-3 text-gray-400 transition-transform duration-150 ${open ? 'rotate-0' : '-rotate-90'}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </button>
-      {open && <div className="px-4 pb-4 space-y-2">{children}</div>}
-    </div>
+    <svg className={`h-4 w-4 shrink-0 animate-spin text-${color}-500`} fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
+function SourceTag({ source }: { source: 'email' | 'meeting' }) {
+  return source === 'meeting' ? (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-300 ml-1.5 align-middle">
+      meeting
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/60 text-gray-600 dark:bg-gray-700 dark:text-gray-300 ml-1.5 align-middle">
+      email
+    </span>
   );
 }
 
@@ -150,41 +136,43 @@ export default function EngagementThreadPage() {
   const [loading, setLoading]       = useState(true);
 
   // Inbound paste modal
-  const [showPasteModal, setShowPasteModal] = useState(false);
-  const [pastedResponse, setPastedResponse] = useState('');
-  const [pasteLoading, setPasteLoading]     = useState(false);
-  const [pasteError, setPasteError]         = useState('');
+  const [showPasteModal, setShowPasteModal]   = useState(false);
+  const [pastedResponse, setPastedResponse]   = useState('');
+  const [pasteLoading, setPasteLoading]       = useState(false);
+  const [pasteError, setPasteError]           = useState('');
 
-  // AI followup panel (Task 3.2)
-  const [followup, setFollowup]             = useState<FollowupOutput | null>(null);
+  // AI followup
+  const [followup, setFollowup]               = useState<FollowupOutput | null>(null);
   const [followupLoading, setFollowupLoading] = useState(false);
-  const [followupError, setFollowupError]   = useState('');
+  const [followupError, setFollowupError]     = useState('');
 
-  // Draft reply editor (followup)
-  const [draftSubject, setDraftSubject]     = useState('');
-  const [draftBody, setDraftBody]           = useState('');
-  const [draftMsgId, setDraftMsgId]         = useState<string | null>(null);
+  // Draft reply editor
+  const [draftSubject, setDraftSubject]       = useState('');
+  const [draftBody, setDraftBody]             = useState('');
+  const [draftMsgId, setDraftMsgId]           = useState<string | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<Set<number>>(new Set());
 
-  // Task 3.3 — resolved gap tracking
+  // Resolved gap tracking
   const [resolvedGapItems, setResolvedGapItems] = useState<Set<string>>(new Set());
   const [resolvingItem, setResolvingItem]       = useState<string | null>(null);
 
-  // Compact thread — track which messages the user has expanded beyond 4 lines
-  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  // Message expansion — track toggled-from-default state
+  // Presence means "flipped": auto-expand + toggled = collapsed; not-auto + toggled = expanded
+  const [toggledMessages, setToggledMessages] = useState<Set<string>>(new Set());
   function toggleMsgExpand(id: string) {
-    setExpandedMessages(prev => {
+    setToggledMessages(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   }
-  const [sending, setSending]               = useState(false);
-  const [sendError, setSendError]           = useState('');
-  const [sendSuccess, setSendSuccess]       = useState(false);
 
-  // Meeting invite (Task 4.1)
-  const [showMeetingPanel, setShowMeetingPanel] = useState(false); // panel visible (not auto-gen)
+  const [sending, setSending]         = useState(false);
+  const [sendError, setSendError]     = useState('');
+  const [sendSuccess, setSendSuccess] = useState(false);
+
+  // Meeting invite — now a modal
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [meetingSubject, setMeetingSubject]     = useState('');
   const [meetingBody, setMeetingBody]           = useState('');
   const [meetingMsgId, setMeetingMsgId]         = useState<string | null>(null);
@@ -193,9 +181,8 @@ export default function EngagementThreadPage() {
   const [meetingSent, setMeetingSent]           = useState(false);
   const [noSchedulingLink, setNoSchedulingLink] = useState(false);
 
-  function closeMeetingPanel() {
-    setShowMeetingPanel(false);
-    // Only clear if not yet sent — preserve sent state for display in thread
+  function closeMeetingModal() {
+    setShowMeetingModal(false);
     if (!meetingSent) {
       setMeetingBody('');
       setMeetingSubject('');
@@ -205,7 +192,7 @@ export default function EngagementThreadPage() {
     }
   }
 
-  // Meeting notes + debrief (Tasks 5.1 & 5.2)
+  // Meeting notes modal — same flow, different source tag
   const [showNotesModal, setShowNotesModal]     = useState(false);
   const [rawNotes, setRawNotes]                 = useState('');
   const [meetingDateInput, setMeetingDateInput] = useState('');
@@ -214,10 +201,92 @@ export default function EngagementThreadPage() {
   const [notesError, setNotesError]             = useState('');
   const [debrief, setDebrief]                   = useState<DebriefOutput | null>(null);
   const [debriefLoading, setDebriefLoading]     = useState(false);
-  // Map of note text → saved note_id (persisted to brief's rfp_context_notes)
   const [rfpNoted, setRfpNoted]                 = useState<Map<string, string>>(new Map());
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  // Show-more for follow-up list
+  const [showAllFollowup, setShowAllFollowup] = useState(false);
+
+  // Items flagged to incorporate into the draft
+  const [addedToDraft, setAddedToDraft]           = useState<Set<string>>(new Set());
+  const [regeneratingDraft, setRegeneratingDraft] = useState(false);
+  const [regenerateError, setRegenerateError]     = useState('');
+  // Tracks resolved count at the time of last successful regen — suppresses amber banner until new resolutions
+  const [resolvedAtLastRegen, setResolvedAtLastRegen] = useState(0);
+
+  function addItemToDraft(text: string) {
+    setAddedToDraft(prev => new Set(prev).add(text));
+  }
+
+  async function regenerateDraft() {
+    if (!draftBody.trim()) return;
+    setRegeneratingDraft(true);
+    setRegenerateError('');
+    try {
+      const res = await fetch(`/api/biotech/engagements/${engagementId}/regenerate-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draft_subject: draftSubject,
+          draft_body:    draftBody,
+          extra_items:   Array.from(addedToDraft),
+          cro_name:      engagement?.cro_name,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json() as { draft_body: string; draft_subject: string };
+      setDraftBody(data.draft_body);
+      if (data.draft_subject) setDraftSubject(data.draft_subject);
+      // Banners cleared: draft is now up to date
+      setAddedToDraft(new Set());
+      setResolvedAtLastRegen(resolvedGapItems.size);
+    } catch {
+      setRegenerateError('Regeneration failed — try again');
+    } finally {
+      setRegeneratingDraft(false);
+    }
+  }
+
+  // Quote logging modal
+  const [showQuoteModal, setShowQuoteModal]   = useState(false);
+  const [quoteAmount, setQuoteAmount]         = useState('');
+  const [quoteCurrency, setQuoteCurrency]     = useState('USD');
+  const [quoteTimeline, setQuoteTimeline]     = useState('');
+  const [quoteValidUntil, setQuoteValidUntil] = useState('');
+  const [quoteNotes, setQuoteNotes]           = useState('');
+  const [savingQuote, setSavingQuote]         = useState(false);
+  const [quoteError, setQuoteError]           = useState('');
+
+  async function handleSaveQuote() {
+    if (!quoteAmount.trim() || !engagement) return;
+    setSavingQuote(true); setQuoteError('');
+    try {
+      const res = await fetch(`/api/biotech/engagements/${engagementId}/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoted_amount:    parseFloat(quoteAmount),
+          quoted_currency:  quoteCurrency,
+          quoted_timeline:  quoteTimeline,
+          quote_valid_until: quoteValidUntil || null,
+          quote_notes:      quoteNotes,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save quote');
+      setShowQuoteModal(false);
+      await loadThread();
+    } catch {
+      setQuoteError('Failed to save — please retry');
+    } finally {
+      setSavingQuote(false);
+    }
+  }
+
+  // Delete + stage controls
+  const [deleteConfirm, setDeleteConfirm]   = useState(false);
+  const [deleting, setDeleting]             = useState(false);
+  const [deleteError, setDeleteError]       = useState('');
+  const [markingStage, setMarkingStage]     = useState<string | null>(null);
+  const [markStageError, setMarkStageError] = useState('');
 
   // ── Load ─────────────────────────────────────────────────────────────────
 
@@ -225,7 +294,7 @@ export default function EngagementThreadPage() {
     const [{ data: engData }, { data: msgData }, { data: meetingData }] = await Promise.all([
       supabase
         .from('cro_engagements')
-        .select('id, cro_name, cro_email, stage, brief_id, rfp_internal_briefs(title, rfp_context_notes)')
+        .select('id, cro_name, cro_email, stage, brief_id, quoted_amount, quoted_currency, quoted_timeline, quote_valid_until, quote_notes, rfp_internal_briefs(title, rfp_context_notes)')
         .eq('id', engagementId)
         .single(),
       supabase
@@ -244,13 +313,11 @@ export default function EngagementThreadPage() {
 
     if (engData) {
       setEngagement(engData as unknown as Engagement);
-      // Restore + RFP selections from the brief's persisted notes
       const savedNotes = ((engData as unknown as Engagement).rfp_internal_briefs?.rfp_context_notes ?? []) as RfpNote[];
       setRfpNoted(new Map(savedNotes.map(n => [n.text, n.id])));
     }
     if (msgData) {
       setMessages(msgData as Message[]);
-      // Restore any existing followup draft + its gap analysis
       const existingFollowup = (msgData as Message[]).find(
         m => m.direction === 'outbound' && m.message_type === 'followup' && m.status === 'draft'
       );
@@ -258,7 +325,6 @@ export default function EngagementThreadPage() {
         setDraftSubject(existingFollowup.subject ?? '');
         setDraftBody(existingFollowup.body ?? '');
         setDraftMsgId(existingFollowup.id);
-        // Restore gap analysis from ai_metadata (persisted when draft was created)
         const meta = existingFollowup.ai_metadata as MessageAiMetadata | null;
         if (meta?.gap_analysis) {
           setFollowup(prev => prev ?? {
@@ -272,7 +338,6 @@ export default function EngagementThreadPage() {
           setResolvedGapItems(new Set(meta.resolved_items));
         }
       }
-      // Restore any existing meeting invite draft
       const existingMeeting = (msgData as Message[]).find(
         m => m.direction === 'outbound' && m.message_type === 'meeting_invite' && m.status === 'draft'
       );
@@ -282,14 +347,10 @@ export default function EngagementThreadPage() {
         setMeetingMsgId(existingMeeting.id);
       }
     }
-
-    // Restore meeting debrief if already done
     if (meetingData?.ai_summary) {
       setDebrief(meetingData.ai_summary as DebriefOutput);
     }
-
     setLoading(false);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   }, [engagementId]);
 
   useEffect(() => {
@@ -301,36 +362,25 @@ export default function EngagementThreadPage() {
     void init();
   }, [loadThread, router]);
 
-  // ── Log inbound response + trigger AI ────────────────────────────────────
+  // ── Handlers (all unchanged) ──────────────────────────────────────────────
 
   async function handleLogResponse() {
     if (!pastedResponse.trim()) return;
     setPasteLoading(true);
     setPasteError('');
     setFollowupLoading(true);
-
     try {
       const res  = await fetch(`/api/biotech/engagements/${engagementId}/inbound`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ response_text: pastedResponse.trim() }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response_text: pastedResponse.trim() }),
       });
       const json = await res.json();
-
       if (!res.ok) {
         setPasteError((json.error as string) ?? 'Failed to save response');
-        setPasteLoading(false);
-        setFollowupLoading(false);
-        return;
+        setPasteLoading(false); setFollowupLoading(false); return;
       }
-
-      // Close modal, refresh thread
-      setShowPasteModal(false);
-      setPastedResponse('');
-      setPasteLoading(false);
+      setShowPasteModal(false); setPastedResponse(''); setPasteLoading(false);
       await loadThread();
-
-      // Set AI followup results
       if (json.followup) {
         setFollowup(json.followup as FollowupOutput);
         setDraftSubject((json.followup as FollowupOutput).draft_subject);
@@ -340,13 +390,10 @@ export default function EngagementThreadPage() {
         setFollowupError(json.ai_error as string);
       }
     } catch {
-      setPasteError('Network error — please try again');
-      setPasteLoading(false);
+      setPasteError('Network error — please try again'); setPasteLoading(false);
     }
     setFollowupLoading(false);
   }
-
-  // ── Insert suggested question into draft body ─────────────────────────────
 
   function toggleQuestion(idx: number) {
     if (!followup) return;
@@ -354,11 +401,9 @@ export default function EngagementThreadPage() {
     setSelectedQuestions(prev => {
       const next = new Set(prev);
       if (next.has(idx)) {
-        // Remove from draft
         next.delete(idx);
         setDraftBody(b => b.replace(`\n\n${question}`, '').replace(`${question}\n\n`, ''));
       } else {
-        // Append to draft
         next.add(idx);
         setDraftBody(b => b.trimEnd() + `\n\n${question}`);
       }
@@ -366,58 +411,36 @@ export default function EngagementThreadPage() {
     });
   }
 
-  // ── Send followup ─────────────────────────────────────────────────────────
-
   async function handleSend() {
     if (!draftMsgId || !draftBody.trim()) return;
-    setSending(true);
-    setSendError('');
-
+    setSending(true); setSendError('');
     const res  = await fetch(`/api/biotech/engagements/${engagementId}/send`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ message_id: draftMsgId, subject: draftSubject, body: draftBody }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: draftMsgId, subject: draftSubject, body: draftBody }),
     });
     const json = await res.json();
-
     if (!res.ok || !json.sent) {
       setSendError((json.error as string) ?? 'Send failed — please retry');
-      setSending(false);
-      return;
+      setSending(false); return;
     }
-
-    setSendSuccess(true);
-    setSending(false);
-    setFollowup(null);
-    setResolvedGapItems(new Set());
+    setSendSuccess(true); setSending(false);
+    setFollowup(null); setResolvedGapItems(new Set());
     await loadThread();
   }
 
-  // ── Toggle RFP note (persists to brief's rfp_context_notes) ─────────────
-
   async function toggleRfpNote(text: string, type: 'rfp_refinement' | 'open_question') {
     if (!engagement) return;
-
     if (rfpNoted.has(text)) {
-      // Remove
       const noteId = rfpNoted.get(text)!;
       await fetch(`/api/biotech/briefs/${engagement.brief_id}/rfp-notes`, {
-        method:  'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ note_id: noteId }),
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note_id: noteId }),
       });
       setRfpNoted(prev => { const m = new Map(prev); m.delete(text); return m; });
     } else {
-      // Add
       const res  = await fetch(`/api/biotech/briefs/${engagement.brief_id}/rfp-notes`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          text,
-          type,
-          source_engagement_id: engagementId,
-          source_cro_name:      engagement.cro_name,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, type, source_engagement_id: engagementId, source_cro_name: engagement.cro_name }),
       });
       const json = await res.json();
       if (res.ok && json.note_id) {
@@ -426,34 +449,21 @@ export default function EngagementThreadPage() {
     }
   }
 
-  // ── Toggle gap item resolved (Task 3.3) ──────────────────────────────────
-
   async function toggleResolvedGap(itemText: string) {
     if (!draftMsgId) return;
     setResolvingItem(itemText);
-
-    const isCurrentlyResolved = resolvedGapItems.has(itemText);
-    const willBeResolved = !isCurrentlyResolved;
-
-    // Optimistic update
+    const willBeResolved = !resolvedGapItems.has(itemText);
     setResolvedGapItems(prev => {
       const next = new Set(prev);
       willBeResolved ? next.add(itemText) : next.delete(itemText);
       return next;
     });
-
     try {
       await fetch(`/api/biotech/engagements/${engagementId}/gap-resolve`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          message_id: draftMsgId,
-          item_text:  itemText,
-          resolved:   willBeResolved,
-        }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: draftMsgId, item_text: itemText, resolved: willBeResolved }),
       });
     } catch {
-      // Rollback on failure
       setResolvedGapItems(prev => {
         const next = new Set(prev);
         willBeResolved ? next.delete(itemText) : next.add(itemText);
@@ -463,166 +473,98 @@ export default function EngagementThreadPage() {
     setResolvingItem(null);
   }
 
-  // ── Delete draft engagement ──────────────────────────────────────────────
-
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [deleting, setDeleting]           = useState(false);
-  const [deleteError, setDeleteError]     = useState('');
-
   async function handleDelete() {
-    setDeleting(true);
-    setDeleteError('');
+    setDeleting(true); setDeleteError('');
     try {
       const res  = await fetch(`/api/biotech/engagements/${engagementId}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok) {
         setDeleteError((json.error as string) ?? 'Failed to delete');
-        setDeleting(false);
-        setDeleteConfirm(false);
-        return;
+        setDeleting(false); setDeleteConfirm(false); return;
       }
-      // Redirect to engagements list after deletion
       router.push('/biotech/engagements');
     } catch {
       setDeleteError('Network error — please retry');
-      setDeleting(false);
-      setDeleteConfirm(false);
+      setDeleting(false); setDeleteConfirm(false);
     }
   }
 
-  // ── Mark engagement outcome (awarded / closed) ───────────────────────────
-
-  const [markingStage, setMarkingStage] = useState<string | null>(null);
-  const [markStageError, setMarkStageError] = useState('');
-
   async function handleMarkStage(newStage: 'awarded' | 'closed' | 'rfp_sent') {
-    setMarkingStage(newStage);
-    setMarkStageError('');
+    setMarkingStage(newStage); setMarkStageError('');
     try {
-      const res = await fetch(`/api/biotech/engagements/${engagementId}/stage`, {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ stage: newStage }),
+      const res  = await fetch(`/api/biotech/engagements/${engagementId}/stage`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: newStage }),
       });
       const json = await res.json();
-      if (!res.ok) {
-        setMarkStageError((json.error as string) ?? 'Failed to update stage');
-      } else {
-        await loadThread();
-      }
+      if (!res.ok) setMarkStageError((json.error as string) ?? 'Failed to update stage');
+      else await loadThread();
     } catch {
       setMarkStageError('Network error — please retry');
     }
     setMarkingStage(null);
   }
 
-  // ── Submit meeting notes + trigger debrief ───────────────────────────────
-
   async function handleLogMeetingNotes() {
     if (!rawNotes.trim()) return;
-    setNotesLoading(true);
-    setNotesError('');
-    setDebriefLoading(true);
-
+    setNotesLoading(true); setNotesError(''); setDebriefLoading(true);
     try {
       const res  = await fetch(`/api/biotech/engagements/${engagementId}/meeting-notes`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          notes:        rawNotes.trim(),
-          meeting_date: meetingDateInput || null,
-          attendees:    attendeesInput   || null,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: rawNotes.trim(), meeting_date: meetingDateInput || null, attendees: attendeesInput || null }),
       });
       const json = await res.json();
-
       if (!res.ok) {
         setNotesError((json.error as string) ?? 'Failed to save notes');
-        setNotesLoading(false);
-        setDebriefLoading(false);
-        return;
+        setNotesLoading(false); setDebriefLoading(false); return;
       }
-
-      setShowNotesModal(false);
-      setRawNotes('');
-      setNotesLoading(false);
+      setShowNotesModal(false); setRawNotes(''); setNotesLoading(false);
       await loadThread();
-
-      if (json.debrief) {
-        setDebrief(json.debrief as DebriefOutput);
-      } else if (json.ai_error) {
-        setNotesError(json.ai_error as string);
-      }
+      if (json.debrief) setDebrief(json.debrief as DebriefOutput);
+      else if (json.ai_error) setNotesError(json.ai_error as string);
     } catch {
-      setNotesError('Network error — please try again');
-      setNotesLoading(false);
+      setNotesError('Network error — please try again'); setNotesLoading(false);
     }
     setDebriefLoading(false);
   }
 
-  // ── Generate meeting invite ───────────────────────────────────────────────
-
   async function handleGenerateMeetingInvite() {
-    setMeetingLoading(true);
-    setMeetingError('');
-    setNoSchedulingLink(false);
-
+    setMeetingLoading(true); setMeetingError(''); setNoSchedulingLink(false);
     const res  = await fetch(`/api/biotech/engagements/${engagementId}/meeting-invite`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
     });
     const json = await res.json();
-
-    if (json.error === 'no_scheduling_link') {
-      setNoSchedulingLink(true);
-      setMeetingLoading(false);
-      return;
-    }
-    if (!res.ok) {
-      setMeetingError((json.error as string) ?? 'Failed to generate invite');
-      setMeetingLoading(false);
-      return;
-    }
+    if (json.error === 'no_scheduling_link') { setNoSchedulingLink(true); setMeetingLoading(false); return; }
+    if (!res.ok) { setMeetingError((json.error as string) ?? 'Failed to generate invite'); setMeetingLoading(false); return; }
     setMeetingSubject(json.subject as string);
     setMeetingBody(json.body as string);
     setMeetingMsgId(json.message_id as string);
     setMeetingLoading(false);
   }
 
-  // ── Send meeting invite ───────────────────────────────────────────────────
-
   async function handleSendMeetingInvite() {
     if (!meetingMsgId || !meetingBody.trim()) return;
-    setMeetingLoading(true);
-    setMeetingError('');
-
+    setMeetingLoading(true); setMeetingError('');
     const res  = await fetch(`/api/biotech/engagements/${engagementId}/send`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ message_id: meetingMsgId, subject: meetingSubject, body: meetingBody }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: meetingMsgId, subject: meetingSubject, body: meetingBody }),
     });
     const json = await res.json();
-
     if (!res.ok || !json.sent) {
       setMeetingError((json.error as string) ?? 'Send failed — please retry');
-      setMeetingLoading(false);
-      return;
+      setMeetingLoading(false); return;
     }
-
-    setMeetingSent(true);
-    setMeetingLoading(false);
+    setMeetingSent(true); setMeetingLoading(false);
+    setShowMeetingModal(false);
     await loadThread();
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Computed ──────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <svg className="h-6 w-6 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
+        <Spinner />
       </div>
     );
   }
@@ -636,33 +578,59 @@ export default function EngagementThreadPage() {
     );
   }
 
-  const isEnquiryDraft      = engagement.stage === 'enquiry_draft';
-  // Can log a CRO response at any active stage — including after RFP sent (loopback)
-  const canLogResponse      = ['enquiry_sent', 'followup_sent', 'meeting_scheduled',
-                               'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
-  // Followup draft panel shows whenever a draft exists or we're in that stage
-  const hasFollowupDraft    = engagement.stage === 'followup_draft'
-    || (engagement.stage === 'meeting_done' && !!draftMsgId);
-  // Can schedule a meeting after followups, after a previous meeting, or even after RFP sent
-  const canScheduleMeeting  = ['followup_sent', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
-  const hasMeetingDraft     = !!meetingMsgId && !meetingSent;
-  // Can log meeting notes when a meeting is scheduled OR to log a second/follow-up meeting
-  const canLogMeetingNotes  = ['meeting_scheduled', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
-  const hasDebrief          = !!debrief || debriefLoading || engagement.stage === 'meeting_done';
-  // Show RFP shortcut at meeting_done and beyond
-  const canGoToRfp          = ['meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
-  // Can mark as awarded or closed at terminal stages
-  const canMarkOutcome      = ['rfp_sent', 'rfp_draft', 'meeting_done'].includes(engagement.stage);
-  // Can revert from an outcome back to rfp_sent (undo mis-click)
-  const canRevertOutcome    = ['awarded', 'closed'].includes(engagement.stage);
-  const stageLabel = STAGE_LABELS[engagement.stage] ?? engagement.stage;
-  const stageColor = STAGE_COLOR[engagement.stage] ?? 'bg-gray-100 text-gray-500';
+  const isEnquiryDraft     = engagement.stage === 'enquiry_draft';
+  const canLogResponse     = ['enquiry_sent', 'followup_sent', 'meeting_scheduled',
+                              'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  const canScheduleMeeting = ['followup_sent', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  const hasMeetingDraft    = !!meetingMsgId && !meetingSent;
+  const canLogMeetingNotes = ['meeting_scheduled', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  const canGoToRfp         = ['meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  const canLogQuote        = ['followup_sent', 'meeting_done', 'rfp_sent', 'quote_received'].includes(engagement.stage);
+  const hasQuote           = engagement.stage === 'quote_received' && !!engagement.quoted_amount;
+  const canMarkOutcome     = ['rfp_sent', 'rfp_draft', 'meeting_done', 'quote_received'].includes(engagement.stage);
+  const canRevertOutcome   = ['awarded', 'closed'].includes(engagement.stage);
+  const hasFollowupDraft   = engagement.stage === 'followup_draft' || (engagement.stage === 'meeting_done' && !!draftMsgId);
+  const stageLabel         = STAGE_LABELS[engagement.stage] ?? engagement.stage;
+  const stageColor         = STAGE_COLOR[engagement.stage] ?? 'bg-gray-100 text-gray-500';
+
+  // Unified analysis: merge email followup + meeting debrief into tagged item lists
+  const needsFollowupItems: (TaggedItem & { canResolve?: boolean })[] = [
+    ...(followup?.gap_analysis.unaddressed ?? []).map(text => ({ text, source: 'email' as const, canResolve: true })),
+    ...(followup?.gap_analysis.concerns    ?? []).map(text => ({ text, source: 'email' as const, canResolve: true })),
+    ...(debrief?.new_concerns    ?? []).map(text => ({ text, source: 'meeting' as const })),
+    ...(debrief?.open_questions  ?? []).map(text => ({ text, source: 'meeting' as const })),
+  ];
+
+  const confirmedItems: TaggedItem[] = [
+    ...(followup?.gap_analysis.confirmed ?? []).map(text => ({ text, source: 'email' as const })),
+    ...(debrief?.gaps_resolved           ?? []).map(text => ({ text, source: 'meeting' as const })),
+  ];
+
+  const rfpSuggestions: TaggedItem[] = [
+    ...(debrief?.rfp_refinements ?? []).map(text => ({ text, source: 'meeting' as const })),
+  ];
+
+  const openNeedsFollowup = needsFollowupItems.filter(item =>
+    item.source === 'email' ? !resolvedGapItems.has(item.text) : !addedToDraft.has(item.text)
+  );
+
+  // Show amber banner when user has resolved email items (draft may be stale)
+  const showRegenerateBanner = resolvedGapItems.size > resolvedAtLastRegen && !!draftMsgId;
+
+  const hasActionCard = followup || followupLoading || hasFollowupDraft || debrief || debriefLoading;
+
+  // Thread: exclude drafts (they live in the action card above), latest at top
+  const threadMessages = messages.filter(m => m.status !== 'draft');
+  const reversedMessages = [...threadMessages].reverse();
+  const latestMsgId      = threadMessages[threadMessages.length - 1]?.id;
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-5xl px-5 py-10 space-y-6">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <header>
           <nav className="mb-1.5 text-xs text-gray-500">
             <a href="/biotech/dashboard" className="hover:text-gray-700 transition-colors">Dashboard</a>
@@ -680,107 +648,102 @@ export default function EngagementThreadPage() {
                 </span>
                 <span className="text-xs text-gray-500">{engagement.cro_email}</span>
                 {engagement.rfp_internal_briefs?.title && (
-                  <a
-                    href={`/biotech/briefs/${engagement.brief_id}`}
-                    className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
-                  >
+                  <a href={`/biotech/briefs/${engagement.brief_id}`}
+                    className="text-xs text-blue-500 hover:text-blue-400 transition-colors">
                     Brief: {engagement.rfp_internal_briefs.title}
                   </a>
                 )}
               </div>
             </div>
 
-            {/* Context-sensitive action buttons */}
+            {/* Action buttons */}
             <div className="flex items-center gap-2 flex-wrap">
               {canLogResponse && (
-                <button
-                  onClick={() => setShowPasteModal(true)}
-                  className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500"
-                >
+                <button onClick={() => setShowPasteModal(true)}
+                  className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500">
                   + Log CRO response
                 </button>
               )}
               {canScheduleMeeting && !hasMeetingDraft && !meetingSent && (
-                <button
-                  onClick={() => setShowMeetingPanel(true)}
-                  className="shrink-0 rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600"
-                >
+                <button onClick={() => setShowMeetingModal(true)}
+                  className="shrink-0 rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600">
                   📅 Schedule meeting
                 </button>
               )}
+              {hasMeetingDraft && (
+                <button onClick={() => setShowMeetingModal(true)}
+                  className="shrink-0 rounded-lg border border-purple-300 bg-purple-50 px-4 py-2 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-100">
+                  📅 Review meeting invite draft
+                </button>
+              )}
               {canLogMeetingNotes && (
-                <button
-                  onClick={() => setShowNotesModal(true)}
-                  className="shrink-0 rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600"
-                >
+                <button onClick={() => setShowNotesModal(true)}
+                  className="shrink-0 rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600">
                   📋 {engagement.stage === 'meeting_done' ? 'Log another meeting' : 'Log meeting notes'}
                 </button>
               )}
               {canGoToRfp && (
-                <a
-                  href={`/biotech/briefs/${engagement.brief_id}/rfp`}
-                  className="shrink-0 rounded-lg border border-blue-600/50 bg-blue-600/10 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-600/20 hover:text-blue-200"
-                >
+                <a href={`/biotech/briefs/${engagement.brief_id}/rfp`}
+                  className="shrink-0 rounded-lg border border-blue-600/50 bg-blue-600/10 px-4 py-2 text-sm font-medium text-blue-300 transition-colors hover:bg-blue-600/20 hover:text-blue-200">
                   📄 {engagement.stage === 'rfp_sent' ? 'View / Resend RFP' : 'Build RFP →'}
                 </a>
               )}
+              {canLogQuote && !hasQuote && (
+                <button onClick={() => setShowQuoteModal(true)}
+                  className="shrink-0 rounded-lg border border-teal-600/50 bg-teal-600/10 px-4 py-2 text-sm font-medium text-teal-300 transition-colors hover:bg-teal-600/20 hover:text-teal-200">
+                  💰 Log quote received
+                </button>
+              )}
+              {hasQuote && (
+                <div className="flex items-center gap-2 rounded-lg border border-teal-600/40 bg-teal-900/20 px-4 py-2">
+                  <span className="text-sm font-semibold text-teal-300">
+                    {engagement.quoted_currency ?? 'USD'} {Number(engagement.quoted_amount).toLocaleString()}
+                  </span>
+                  {engagement.quoted_timeline && (
+                    <span className="text-xs text-teal-500">· {engagement.quoted_timeline}</span>
+                  )}
+                  <button onClick={() => setShowQuoteModal(true)}
+                    className="text-xs text-teal-500 hover:text-teal-300 transition-colors ml-1">
+                    Edit
+                  </button>
+                </div>
+              )}
               {canMarkOutcome && (
                 <>
-                  <button
-                    onClick={() => handleMarkStage('awarded')}
-                    disabled={markingStage !== null}
-                    className="shrink-0 rounded-lg bg-green-50 border border-green-200 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
-                  >
+                  <button onClick={() => handleMarkStage('awarded')} disabled={markingStage !== null}
+                    className="shrink-0 rounded-lg bg-green-50 border border-green-200 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50">
                     {markingStage === 'awarded' ? 'Saving…' : '🏆 Mark awarded'}
                   </button>
-                  <button
-                    onClick={() => handleMarkStage('closed')}
-                    disabled={markingStage !== null}
-                    className="shrink-0 rounded-lg bg-gray-100 border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-200 disabled:opacity-50"
-                  >
+                  <button onClick={() => handleMarkStage('closed')} disabled={markingStage !== null}
+                    className="shrink-0 rounded-lg bg-gray-100 border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-200 disabled:opacity-50">
                     {markingStage === 'closed' ? 'Saving…' : 'Mark closed'}
                   </button>
                 </>
               )}
               {canRevertOutcome && (
-                <button
-                  onClick={() => handleMarkStage('rfp_sent')}
-                  disabled={markingStage !== null}
-                  className="shrink-0 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700 disabled:opacity-50"
-                  title="Revert to RFP sent — undo outcome mark"
-                >
+                <button onClick={() => handleMarkStage('rfp_sent')} disabled={markingStage !== null}
+                  className="shrink-0 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700 disabled:opacity-50">
                   {markingStage === 'rfp_sent' ? 'Reverting…' : '↩ Revert to RFP sent'}
                 </button>
               )}
-              {markStageError && (
-                <p className="text-xs text-red-600">⚠ {markStageError}</p>
-              )}
+              {markStageError && <p className="text-xs text-red-600">⚠ {markStageError}</p>}
 
-              {/* Delete draft — only available before the enquiry is sent */}
               {isEnquiryDraft && (
                 <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200">
                   {!deleteConfirm ? (
-                    <button
-                      onClick={() => setDeleteConfirm(true)}
-                      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-red-300 hover:text-red-600"
-                    >
+                    <button onClick={() => setDeleteConfirm(true)}
+                      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-red-300 hover:text-red-600">
                       Delete draft
                     </button>
                   ) : (
                     <>
                       <span className="text-xs text-gray-500 shrink-0">Delete this draft?</span>
-                      <button
-                        onClick={handleDelete}
-                        disabled={deleting}
-                        className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
-                      >
+                      <button onClick={handleDelete} disabled={deleting}
+                        className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50">
                         {deleting ? 'Deleting…' : 'Yes, delete'}
                       </button>
-                      <button
-                        onClick={() => { setDeleteConfirm(false); setDeleteError(''); }}
-                        disabled={deleting}
-                        className="shrink-0 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                      >
+                      <button onClick={() => { setDeleteConfirm(false); setDeleteError(''); }} disabled={deleting}
+                        className="shrink-0 text-xs text-gray-500 hover:text-gray-700 transition-colors">
                         Cancel
                       </button>
                     </>
@@ -792,7 +755,7 @@ export default function EngagementThreadPage() {
           </div>
         </header>
 
-        {/* Enquiry not yet sent — nudge user back to CRO selection */}
+        {/* Enquiry not sent banner */}
         {isEnquiryDraft && (
           <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
@@ -801,609 +764,355 @@ export default function EngagementThreadPage() {
                 The outreach email to {engagement.cro_name} hasn&apos;t been sent. Select CROs and send from the brief.
               </p>
             </div>
-            <a
-              href={`/biotech/briefs/${engagement.brief_id}`}
-              className="shrink-0 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-600"
-            >
+            <a href={`/biotech/briefs/${engagement.brief_id}`}
+              className="shrink-0 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-600">
               Back to brief →
             </a>
           </div>
         )}
 
-        {/* Main two-column layout when right panel is active */}
-        <div className={`grid gap-6 items-start ${(followup || followupLoading || hasFollowupDraft || showMeetingPanel || hasMeetingDraft || hasDebrief) ? 'grid-cols-1 lg:grid-cols-[1fr_400px]' : 'grid-cols-1'}`}>
+        {/* ── ACTION CARD ── */}
+        {hasActionCard && (
+          <section className="rounded-2xl border border-gray-200 bg-gray-50 shadow-sm overflow-hidden">
 
-          {/* ── Left: message thread ── */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-500">Thread</h2>
-
-            {/* ── "Still need to know" card (Task 3.3) ── */}
-            {followup?.gap_analysis && (() => {
-              const openItems = [
-                ...followup.gap_analysis.unaddressed,
-                ...followup.gap_analysis.concerns,
-              ].filter(item => !resolvedGapItems.has(item));
-              if (openItems.length === 0) return null;
-              return (
-                <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600">
-                      ⚠ Still need to know ({openItems.length})
-                    </p>
-                    <p className="text-[10px] text-gray-500">Mark resolved in gap analysis →</p>
-                  </div>
-                  <ul className="space-y-1">
-                    {openItems.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-amber-700">
-                        <span className="mt-0.5 shrink-0">·</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })()}
-
-            {messages.length === 0 ? (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm text-gray-500">
-                No messages yet in this engagement.
+            {/* Loading */}
+            {(followupLoading || debriefLoading) && (
+              <div className="px-6 py-5 flex items-center gap-3 text-sm text-gray-500">
+                <Spinner color={debriefLoading ? 'purple' : 'blue'} />
+                {debriefLoading ? 'Analysing meeting notes…' : 'Analysing response and drafting reply…'}
               </div>
-            ) : (
-              <div className="space-y-3">
-                {messages.map(msg => {
-                  const isOut = msg.direction === 'outbound';
-                  const isDraft = msg.status === 'draft';
+            )}
 
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`rounded-xl border p-4 space-y-2 ${
-                        isDraft
-                          ? 'border-amber-800/30 bg-amber-950/20'
-                          : isOut
-                          ? 'border-blue-100 bg-blue-50'
-                          : 'border-gray-200 bg-gray-50'
-                      }`}
-                    >
-                      {/* Message header */}
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                            isDraft     ? 'bg-amber-50 text-amber-700' :
-                            isOut       ? 'bg-blue-50 border border-blue-200 text-blue-600' :
+            {followupError && (
+              <div className="px-6 py-4 text-xs text-red-600 border-b border-gray-100">⚠ {followupError}</div>
+            )}
+
+            {/* Main content */}
+            {(followup || debrief) && !followupLoading && !debriefLoading && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
+
+                {/* ── LEFT: Analysis ── */}
+                <div className="p-6 space-y-6">
+
+                  {/* Needs follow-up */}
+                  {openNeedsFollowup.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">
+                          Needs follow-up
+                        </span>
+                        <span className="rounded-full bg-amber-200 text-amber-800 dark:bg-amber-700/50 dark:text-amber-200 text-[10px] font-semibold px-1.5 py-0.5">
+                          {openNeedsFollowup.length}
+                        </span>
+                      </div>
+                      <ul className="space-y-2">
+                        {(showAllFollowup ? openNeedsFollowup : openNeedsFollowup.slice(0, 5)).map((item, i) => {
+                          const resolved  = item.source === 'email' && resolvedGapItems.has(item.text);
+                          const inDraft   = addedToDraft.has(item.text);
+                          return (
+                            <li key={i} className={`flex items-start gap-2 transition-opacity ${resolved || inDraft ? 'opacity-40' : ''}`}>
+                              <span className={`mt-0.5 shrink-0 text-xs ${item.source === 'email' ? 'text-amber-600 dark:text-amber-400' : 'text-red-500 dark:text-red-400'}`}>
+                                {item.source === 'email' ? '?' : '⚠'}
+                              </span>
+                              <span className={`flex-1 text-xs leading-relaxed ${resolved || inDraft ? 'line-through text-amber-400 dark:text-amber-600' : 'text-amber-900 dark:text-amber-100'}`}>
+                                {item.text}
+                                <SourceTag source={item.source} />
+                              </span>
+                              {/* Add to draft — all items */}
+                              <button
+                                onClick={() => addItemToDraft(item.text)}
+                                disabled={inDraft}
+                                className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                  inDraft
+                                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
+                                    : 'text-amber-700 dark:text-amber-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                                }`}
+                              >
+                                {inDraft ? '✓ In draft' : '→ Draft'}
+                              </button>
+                              {/* Resolve — email items only */}
+                              {item.canResolve && (
+                                <button
+                                  onClick={() => toggleResolvedGap(item.text)}
+                                  disabled={resolvingItem === item.text}
+                                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                    resolved
+                                      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                      : 'text-amber-700 dark:text-amber-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30'
+                                  }`}
+                                >
+                                  {resolved ? '✓ Resolved' : 'Resolve'}
+                                </button>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {openNeedsFollowup.length > 5 && (
+                        <button
+                          onClick={() => setShowAllFollowup(v => !v)}
+                          className="text-[11px] text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 transition-colors mt-1"
+                        >
+                          {showAllFollowup
+                            ? '↑ Show fewer'
+                            : `↓ Show ${openNeedsFollowup.length - 5} more`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {openNeedsFollowup.length === 0 && needsFollowupItems.length > 0 && (
+                    <div className="rounded-lg border border-green-200 bg-green-50 dark:border-green-700/40 dark:bg-green-900/20 px-3 py-2.5 flex items-center gap-2 text-xs text-green-700 dark:text-green-300 font-medium">
+                      <span>✓</span>
+                      <span>All follow-up items resolved</span>
+                    </div>
+                  )}
+
+                  {/* Confirmed — collapsed by default */}
+                  {confirmedItems.length > 0 && (
+                    <div className="rounded-lg border border-green-200 bg-green-50 dark:border-green-700/40 dark:bg-green-900/20 p-3">
+                      <ConfirmedCollapsible items={confirmedItems} />
+                    </div>
+                  )}
+
+                  {/* RFP scope updates — meeting refinements */}
+                  {rfpSuggestions.length > 0 && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-700/40 dark:bg-blue-900/20 p-3 space-y-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-widest text-blue-800 dark:text-blue-300">
+                        RFP scope updates
+                      </span>
+                      <ul className="space-y-2">
+                        {rfpSuggestions.map((item, i) => {
+                          const saved = rfpNoted.has(item.text);
+                          return (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="mt-0.5 shrink-0 text-xs text-blue-500 dark:text-blue-400">→</span>
+                              <span className="flex-1 text-xs text-blue-900 dark:text-blue-100 leading-relaxed">
+                                {item.text}
+                                <SourceTag source={item.source} />
+                              </span>
+                              <button
+                                onClick={() => toggleRfpNote(item.text, 'rfp_refinement')}
+                                className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                  saved
+                                    ? 'bg-blue-200 text-blue-700 dark:bg-blue-800/50 dark:text-blue-200'
+                                    : 'text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/40'
+                                }`}
+                              >
+                                {saved ? '✓ Saved' : '+ Scope note'}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {rfpNoted.size > 0 && (
+                        <a href={`/biotech/briefs/${engagement?.brief_id}`}
+                          className="text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors">
+                          {rfpNoted.size} item{rfpNoted.size !== 1 ? 's' : ''} saved to RFP context · View brief →
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Suggested questions (secondary, collapsed) */}
+                  {followup && followup.suggested_questions.length > 0 && (
+                    <SuggestedQuestionsCollapsible
+                      questions={followup.suggested_questions}
+                      selected={selectedQuestions}
+                      onToggle={toggleQuestion}
+                    />
+                  )}
+                </div>
+
+                {/* ── RIGHT: Draft reply / waiting state — always rendered when action card is visible ── */}
+                <div className="p-6 space-y-4">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-600">
+                      {followup || hasFollowupDraft ? 'Draft reply' : 'Next step'}
+                    </span>
+
+                    {/* Waiting state — persistent, shown whenever there's no draft to edit */}
+                    {!followup && !hasFollowupDraft && (
+                      <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
+                        <div className={`rounded-full p-4 ${sendSuccess ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                          {sendSuccess ? (
+                            <svg className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg className="h-8 w-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                            {sendSuccess ? 'Follow-up sent' : 'Waiting for reply'}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
+                            Waiting for {engagement?.cro_name ?? 'CRO'} to reply. When they do, click <strong>+ Log CRO response</strong> above to continue the analysis.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Regenerate notice — shown when user has flagged items via → Draft */}
+                    {(followup || hasFollowupDraft) && addedToDraft.size > 0 && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-center justify-between gap-3">
+                        <p className="text-xs text-blue-700 leading-relaxed">
+                          {addedToDraft.size} item{addedToDraft.size !== 1 ? 's' : ''} queued — regenerate to incorporate {addedToDraft.size !== 1 ? 'them' : 'it'} as proper sentences.
+                        </p>
+                        <button
+                          onClick={regenerateDraft}
+                          disabled={regeneratingDraft}
+                          className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                        >
+                          {regeneratingDraft ? 'Rewriting…' : '↺ Regenerate'}
+                        </button>
+                      </div>
+                    )}
+                    {regenerateError && <p className="text-xs text-red-600">⚠ {regenerateError}</p>}
+
+                    {/* Editor + send button — only when a draft exists */}
+                    {(followup || hasFollowupDraft) && (
+                      <>
+                        {/* Stale notice */}
+                        {showRegenerateBanner && addedToDraft.size === 0 && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-center justify-between gap-3">
+                            <p className="text-xs text-amber-700 leading-relaxed">
+                              {resolvedGapItems.size - resolvedAtLastRegen} item{resolvedGapItems.size - resolvedAtLastRegen !== 1 ? 's' : ''} resolved — regenerate to clean up the draft.
+                            </p>
+                            <button
+                              onClick={regenerateDraft}
+                              disabled={regeneratingDraft}
+                              className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50 transition-colors"
+                            >
+                              {regeneratingDraft ? 'Rewriting…' : '↺ Regenerate'}
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-gray-500">Subject</p>
+                          <input type="text" value={draftSubject} onChange={e => setDraftSubject(e.target.value)}
+                            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-gray-500">Message</p>
+                          <textarea value={draftBody} onChange={e => setDraftBody(e.target.value)} rows={12}
+                            className="w-full resize-y rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+
+                        {sendError && <p className="text-xs text-red-600">⚠ {sendError}</p>}
+
+                        <button onClick={handleSend} disabled={sending || !draftBody.trim() || !draftMsgId}
+                          className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400">
+                          {sending ? 'Sending…' : 'Approve & Send →'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── THREAD — latest at top ── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-600">Thread</h2>
+
+          {messages.length === 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm text-gray-500">
+              No messages yet in this engagement.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {reversedMessages.map(msg => {
+                const isOut   = msg.direction === 'outbound';
+                const isDraft = msg.status === 'draft';
+                const isMeetingNote = msg.message_type === 'meeting_notes';
+                const autoExpand    = isDraft || msg.id === latestMsgId;
+                const toggled       = toggledMessages.has(msg.id);
+                const isExpanded    = autoExpand ? !toggled : toggled;
+                const bodyText      = msg.body ?? '';
+                const needsToggle   = bodyText.length > 280;
+
+                return (
+                  <div key={msg.id} className={`rounded-xl border p-4 space-y-2 ${
+                    isDraft       ? 'border-amber-800/30 bg-amber-950/20' :
+                    isMeetingNote ? 'border-purple-100 bg-purple-50/50' :
+                    isOut         ? 'border-blue-100 bg-blue-50' :
+                                    'border-gray-200 bg-gray-50'
+                  }`}>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                          isDraft       ? 'bg-amber-50 text-amber-700' :
+                          isMeetingNote ? 'bg-purple-100 text-purple-600' :
+                          isOut         ? 'bg-blue-50 border border-blue-200 text-blue-600' :
                                           'bg-gray-100 text-gray-500'
-                          }`}>
-                            {isDraft ? 'Draft' : isOut ? 'Sent' : 'Received'}
-                          </span>
+                        }`}>
+                          {isDraft ? 'Draft' : isMeetingNote ? 'Meeting notes' : isOut ? 'Sent' : 'Received'}
+                        </span>
+                        {!isMeetingNote && (
                           <span className="text-xs text-gray-500 capitalize">
                             {msg.message_type.replace(/_/g, ' ')}
                           </span>
-                          {msg.ai_generated && (
-                            <span className="text-[10px] text-gray-500">AI</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-500">
-                          {fmt(msg.sent_at ?? msg.created_at)}
-                        </span>
+                        )}
+                        {msg.ai_generated && (
+                          <span className="text-[10px] text-gray-500">AI</span>
+                        )}
                       </div>
-
-                      {/* Subject */}
-                      {msg.subject && (
-                        <p className="text-xs font-medium text-gray-500">Subject: {msg.subject}</p>
-                      )}
-
-                      {/* Body — compact (4 lines) with Show more toggle */}
-                      {(() => {
-                        const bodyText = msg.body ?? '';
-                        // Draft messages and the latest message start expanded
-                        const autoExpand = isDraft || msg.id === messages[messages.length - 1]?.id;
-                        const isExpanded = autoExpand || expandedMessages.has(msg.id);
-                        const needsToggle = bodyText.length > 280 && !autoExpand;
-                        return (
-                          <div>
-                            <p className={`text-sm text-gray-800 whitespace-pre-wrap leading-relaxed ${
-                              !isExpanded ? 'line-clamp-4' : ''
-                            }`}>
-                              {bodyText}
-                            </p>
-                            {needsToggle && (
-                              <button
-                                onClick={() => toggleMsgExpand(msg.id)}
-                                className="mt-1 text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
-                              >
-                                {isExpanded ? '▴ Show less' : '▾ Show more'}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Delivery status — only for sent/delivered/bounced messages */}
-                      {isOut && !isDraft && ['sent', 'delivered', 'bounced'].includes(msg.status) && (
-                        <div className="flex items-center gap-1.5 pt-1">
-                          <span className={`h-1.5 w-1.5 rounded-full ${
-                            msg.status === 'delivered' ? 'bg-green-500' :
-                            msg.status === 'bounced'   ? 'bg-red-500' :
-                                                         'bg-blue-500'
-                          }`} />
-                          <span className="text-[10px] text-gray-500 capitalize">{msg.status}</span>
-                        </div>
-                      )}
-                      {/* Failed send — show retry link */}
-                      {isOut && !isDraft && msg.status === 'failed' && (
-                        <div className="flex items-center gap-2 pt-1">
-                          <span className="text-[10px] text-red-600">⚠ Send failed</span>
-                          <a
-                            href={`/biotech/briefs/${engagement.brief_id}`}
-                            className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors underline"
-                          >
-                            Go back to brief →
-                          </a>
-                        </div>
-                      )}
+                      <span className="text-xs text-gray-500">{fmt(msg.sent_at ?? msg.created_at)}</span>
                     </div>
-                  );
-                })}
-                <div ref={bottomRef} />
-              </div>
-            )}
-          </div>
 
-          {/* ── Right: consolidated sticky panel ── */}
-          {(showMeetingPanel || hasMeetingDraft || hasDebrief || followup || followupLoading || hasFollowupDraft) && (
-            <aside className="space-y-3 lg:sticky lg:top-4 max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
+                    {msg.subject && (
+                      <p className="text-xs font-medium text-gray-700">Subject: {msg.subject}</p>
+                    )}
 
-          {/* ══ Meeting invite ══ */}
-          {(showMeetingPanel || hasMeetingDraft) && (<div className="space-y-3">
-
-              {/* Panel header with cancel */}
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-purple-400">
-                  📅 Meeting invite
-                </h3>
-                {!meetingSent && (
-                  <button
-                    onClick={closeMeetingPanel}
-                    className="text-xs text-gray-500 hover:text-gray-700 transition-colors border border-gray-200 hover:border-gray-300 rounded px-2 py-1"
-                  >
-                    ✕ Cancel
-                  </button>
-                )}
-              </div>
-
-              {/* No scheduling link configured */}
-              {noSchedulingLink && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-                  <p className="text-sm font-medium text-amber-700">Booking link not set</p>
-                  <p className="text-xs text-amber-700">
-                    Add your Calendly or Cal.com booking URL in settings so the invite can include it.
-                  </p>
-                  <a
-                    href="/biotech/settings"
-                    className="inline-block text-xs text-blue-400 hover:text-blue-300 transition-colors underline"
-                  >
-                    Open settings →
-                  </a>
-                </div>
-              )}
-
-              {/* Step 1: Generate prompt — shown before generating */}
-              {!meetingBody && !meetingLoading && !noSchedulingLink && (
-                <div className="rounded-xl border border-purple-100 bg-purple-50 p-5 space-y-4">
-                  <div>
-                    <p className="text-sm text-gray-700 font-medium mb-1">AI-draft a meeting request</p>
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      Our AI algorithm will write a short professional meeting request email
-                      with your booking link included. You can edit it before sending.
-                    </p>
-                  </div>
-                  {meetingError && (
-                    <p className="text-xs text-red-600 rounded-lg border border-red-800/40 bg-red-950/20 px-3 py-2">
-                      ⚠ {meetingError}
-                    </p>
-                  )}
-                  <button
-                    onClick={handleGenerateMeetingInvite}
-                    className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-white"
-                  >
-                    ✦ Generate invite draft →
-                  </button>
-                </div>
-              )}
-
-              {/* Generating spinner */}
-              {meetingLoading && (
-                <div className="rounded-xl border border-gray-200 bg-white p-5 flex items-center gap-3 text-sm text-gray-500">
-                  <svg className="h-4 w-4 shrink-0 animate-spin text-purple-500" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Drafting meeting invite…
-                </div>
-              )}
-
-              {/* Step 2: Draft editor — shown after generation */}
-              {meetingBody && !meetingLoading && (
-                <div className="rounded-xl border border-purple-100 bg-purple-50 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-700">
-                      Review &amp; edit draft
-                    </p>
-                    <button
-                      onClick={() => { setMeetingBody(''); setMeetingMsgId(null); setMeetingError(''); handleGenerateMeetingInvite(); }}
-                      className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      ↺ Re-draft
-                    </button>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-gray-500">Subject</p>
-                    <input
-                      type="text"
-                      value={meetingSubject}
-                      onChange={e => setMeetingSubject(e.target.value)}
-                      disabled={meetingSent}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-gray-500">Message</p>
-                    <textarea
-                      value={meetingBody}
-                      onChange={e => setMeetingBody(e.target.value)}
-                      disabled={meetingSent}
-                      rows={9}
-                      className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
-                    />
-                  </div>
-
-                  {meetingError && <p className="text-xs text-red-600">⚠ {meetingError}</p>}
-                  {meetingSent  && (
-                    <p className="text-xs text-green-600">
-                      ✓ Meeting invite sent — stage updated to &quot;Meeting scheduled&quot;
-                    </p>
-                  )}
-
-                  {!meetingSent && (
-                    <button
-                      onClick={handleSendMeetingInvite}
-                      disabled={meetingLoading || !meetingBody.trim() || !meetingMsgId}
-                      className="w-full rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-                    >
-                      {meetingLoading ? 'Sending…' : 'Approve & Send invite →'}
-                    </button>
-                  )}
-                </div>
-              )}
-          </div>)}
-
-          {/* ══ Meeting debrief ══ */}
-          {hasDebrief && (<div className="space-y-3">
-
-              {debriefLoading && (
-                <div className="rounded-xl border border-gray-200 bg-white p-5 flex items-center gap-3 text-sm text-gray-500">
-                  <svg className="h-4 w-4 shrink-0 animate-spin text-purple-500" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Analysing meeting notes…
-                </div>
-              )}
-
-              {debrief && !debriefLoading && (
-                <>
-                  {/* Section label */}
-                  <div className="px-1 pt-1">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-purple-500">Meeting debrief</p>
-                  </div>
-
-                  {/* ✓ Confirmed in meeting */}
-                  {debrief.gaps_resolved.length > 0 && (
-                    <CollapsiblePanel
-                      title="✓ Confirmed in meeting"
-                      badge={debrief.gaps_resolved.length}
-                      defaultOpen={true}
-                      borderClass="border-green-800/30"
-                      bgClass="bg-green-950/10"
-                      titleClass="text-green-400"
-                    >
-                      <ul className="space-y-1.5">
-                        {debrief.gaps_resolved.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
-                            <span className="mt-0.5 shrink-0 text-green-600">✓</span>{item}
-                          </li>
-                        ))}
-                      </ul>
-                    </CollapsiblePanel>
-                  )}
-
-                  {/* ⚠ New concerns */}
-                  {debrief.new_concerns.length > 0 && (
-                    <CollapsiblePanel
-                      title="⚠ New concerns"
-                      badge={debrief.new_concerns.length}
-                      defaultOpen={true}
-                      borderClass="border-red-800/30"
-                      bgClass="bg-red-950/10"
-                      titleClass="text-red-400"
-                    >
-                      <ul className="space-y-1.5">
-                        {debrief.new_concerns.map((item, i) => (
-                          <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
-                            <span className="mt-0.5 shrink-0 text-red-600">⚠</span>{item}
-                          </li>
-                        ))}
-                      </ul>
-                    </CollapsiblePanel>
-                  )}
-
-                  {/* 📝 RFP refinements */}
-                  {debrief.rfp_refinements.length > 0 && (
-                    <CollapsiblePanel
-                      title="📝 RFP refinements"
-                      badge={debrief.rfp_refinements.length}
-                      defaultOpen={true}
-                      borderClass="border-blue-800/30"
-                      bgClass="bg-blue-950/10"
-                      titleClass="text-blue-400"
-                    >
-                      <ul className="space-y-2">
-                        {debrief.rfp_refinements.map((item, i) => {
-                          const noted = rfpNoted.has(item);
-                          return (
-                            <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
-                              <span className="mt-0.5 shrink-0 text-blue-600">→</span>
-                              <span className="flex-1">{item}</span>
-                              <button
-                                onClick={() => toggleRfpNote(item, 'rfp_refinement')}
-                                className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${noted ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-blue-400'}`}
-                              >
-                                {noted ? '✓ Saved' : '+ RFP'}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </CollapsiblePanel>
-                  )}
-
-                  {/* ❓ Still open */}
-                  {debrief.open_questions.length > 0 && (
-                    <CollapsiblePanel
-                      title="❓ Still open"
-                      badge={debrief.open_questions.length}
-                      defaultOpen={true}
-                      borderClass="border-amber-800/30"
-                      bgClass="bg-amber-950/10"
-                      titleClass="text-amber-400"
-                    >
-                      <ul className="space-y-2">
-                        {debrief.open_questions.map((item, i) => {
-                          const noted = rfpNoted.has(item);
-                          return (
-                            <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
-                              <span className="mt-0.5 shrink-0 text-amber-600">?</span>
-                              <span className="flex-1">{item}</span>
-                              <button
-                                onClick={() => toggleRfpNote(item, 'open_question')}
-                                className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${noted ? 'bg-amber-50 text-amber-700' : 'text-gray-500 hover:text-amber-600'}`}
-                              >
-                                {noted ? '✓ Flagged' : '+ RFP'}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </CollapsiblePanel>
-                  )}
-
-                  {rfpNoted.size > 0 && (
-                    <div className="rounded-lg bg-gray-100 px-3 py-2 flex items-center justify-between">
-                      <p className="text-[11px] text-gray-500">
-                        {rfpNoted.size} item{rfpNoted.size !== 1 ? 's' : ''} saved to RFP context
+                    <div>
+                      <p className={`text-sm text-gray-800 whitespace-pre-wrap leading-relaxed ${!isExpanded ? 'line-clamp-4' : ''}`}>
+                        {bodyText}
                       </p>
-                      <a
-                        href={`/biotech/briefs/${engagement?.brief_id}`}
-                        className="text-[11px] text-blue-500 hover:text-blue-400 transition-colors"
-                      >
-                        View brief →
-                      </a>
+                      {needsToggle && (
+                        <button onClick={() => toggleMsgExpand(msg.id)}
+                          className="mt-1 text-[11px] text-gray-500 hover:text-gray-700 transition-colors">
+                          {isExpanded ? '▴ Show less' : '▾ Show more'}
+                        </button>
+                      )}
                     </div>
-                  )}
-                </>
-              )}
 
-              {engagement.stage === 'meeting_done' && !debrief && !debriefLoading && (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-center text-xs text-gray-500">
-                  Meeting notes saved — AI analysis not available.
-                </div>
-              )}
-          </div>)}
-
-          {/* ══ AI followup ══ */}
-          {(followup || followupLoading || hasFollowupDraft) && (<div className="space-y-3">
-
-              {/* Generating spinner */}
-              {followupLoading && (
-                <div className="rounded-xl border border-gray-200 bg-white p-5 flex items-center gap-3 text-sm text-gray-500">
-                  <svg className="h-4 w-4 shrink-0 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Analysing response and drafting reply…
-                </div>
-              )}
-
-              {followupError && (
-                <div className="rounded-xl border border-red-800/40 bg-red-950/20 p-4 text-xs text-red-600">
-                  ⚠ {followupError}
-                </div>
-              )}
-
-              {followup && !followupLoading && (
-                <>
-                  {/* Gap analysis — collapsible */}
-                  <CollapsiblePanel
-                    title="Gap analysis"
-                    badge={[...followup.gap_analysis.unaddressed, ...followup.gap_analysis.concerns].filter(i => !resolvedGapItems.has(i)).length || undefined}
-                    defaultOpen={true}
-                  >
-                    {followup.gap_analysis.confirmed.length > 0 && (
-                      <div className="mb-2">
-                        <p className="text-[11px] font-semibold text-green-600 mb-1.5">✓ Confirmed</p>
-                        <ul className="space-y-1">
-                          {followup.gap_analysis.confirmed.map((item, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
-                              <span className="mt-0.5 shrink-0 text-green-600">✓</span>{item}
-                            </li>
-                          ))}
-                        </ul>
+                    {isOut && !isDraft && ['sent', 'delivered', 'bounced'].includes(msg.status) && (
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          msg.status === 'delivered' ? 'bg-green-500' :
+                          msg.status === 'bounced'   ? 'bg-red-500' : 'bg-blue-500'
+                        }`} />
+                        <span className="text-[10px] text-gray-500 capitalize">{msg.status}</span>
                       </div>
                     )}
-
-                    {followup.gap_analysis.unaddressed.length > 0 && (
-                      <div>
-                        <p className="text-[11px] font-semibold text-amber-600 mb-1.5">? Unaddressed</p>
-                        <ul className="space-y-1.5">
-                          {followup.gap_analysis.unaddressed.map((item, i) => {
-                            const resolved = resolvedGapItems.has(item);
-                            return (
-                              <li key={i} className={`flex items-start gap-2 text-xs transition-opacity ${resolved ? 'opacity-40' : ''}`}>
-                                <span className="mt-0.5 shrink-0 text-amber-600">?</span>
-                                <span className={`flex-1 ${resolved ? 'line-through text-gray-500' : 'text-gray-500'}`}>{item}</span>
-                                <button
-                                  onClick={() => toggleResolvedGap(item)}
-                                  disabled={resolvingItem === item}
-                                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                                    resolved
-                                      ? 'bg-green-50 text-green-600 hover:bg-gray-100'
-                                      : 'text-gray-500 hover:text-green-600'
-                                  }`}
-                                  title={resolved ? 'Mark unresolved' : 'Mark resolved'}
-                                >
-                                  {resolved ? '✓ Resolved' : 'Resolve'}
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                    {isOut && !isDraft && msg.status === 'failed' && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[10px] text-red-600">⚠ Send failed</span>
+                        <a href={`/biotech/briefs/${engagement.brief_id}`}
+                          className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors underline">
+                          Go back to brief →
+                        </a>
                       </div>
                     )}
-
-                    {followup.gap_analysis.concerns.length > 0 && (
-                      <div>
-                        <p className="text-[11px] font-semibold text-red-600 mb-1.5">⚠ Concerns</p>
-                        <ul className="space-y-1.5">
-                          {followup.gap_analysis.concerns.map((item, i) => {
-                            const resolved = resolvedGapItems.has(item);
-                            return (
-                              <li key={i} className={`flex items-start gap-2 text-xs transition-opacity ${resolved ? 'opacity-40' : ''}`}>
-                                <span className="mt-0.5 shrink-0 text-red-600">⚠</span>
-                                <span className={`flex-1 ${resolved ? 'line-through text-gray-500' : 'text-gray-500'}`}>{item}</span>
-                                <button
-                                  onClick={() => toggleResolvedGap(item)}
-                                  disabled={resolvingItem === item}
-                                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                                    resolved
-                                      ? 'bg-green-50 text-green-600 hover:bg-gray-100'
-                                      : 'text-gray-500 hover:text-green-600'
-                                  }`}
-                                  title={resolved ? 'Mark unresolved' : 'Mark resolved'}
-                                >
-                                  {resolved ? '✓ Resolved' : 'Resolve'}
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    )}
-                  </CollapsiblePanel>
-
-                  {/* Suggested questions */}
-                  {followup.suggested_questions.length > 0 && (
-                    <CollapsiblePanel
-                      title="Suggested questions"
-                      badge={followup.suggested_questions.length}
-                      defaultOpen={false}
-                    >
-                      <p className="text-[10px] text-gray-500 mb-2">Check to insert into reply</p>
-                      <div className="space-y-2">
-                        {followup.suggested_questions.map((q, i) => (
-                          <label key={i} className="flex items-start gap-2.5 cursor-pointer group">
-                            <input
-                              type="checkbox"
-                              checked={selectedQuestions.has(i)}
-                              onChange={() => toggleQuestion(i)}
-                              className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-gray-300 bg-white text-blue-500 focus:ring-blue-500 focus:ring-offset-white"
-                            />
-                            <span className={`text-xs leading-relaxed transition-colors ${
-                              selectedQuestions.has(i) ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-700'
-                            }`}>
-                              {q}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </CollapsiblePanel>
-                  )}
-                </>
-              )}
-
-              {/* Draft reply editor — shown for followup_draft stage or after AI */}
-              {(followup || hasFollowupDraft) && !followupLoading && (
-                <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500">Draft reply</h3>
-
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-gray-500">Subject</p>
-                    <input
-                      type="text"
-                      value={draftSubject}
-                      onChange={e => setDraftSubject(e.target.value)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
                   </div>
-
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-gray-500">Message</p>
-                    <textarea
-                      value={draftBody}
-                      onChange={e => setDraftBody(e.target.value)}
-                      rows={10}
-                      className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {sendError && (
-                    <p className="text-xs text-red-600">⚠ {sendError}</p>
-                  )}
-                  {sendSuccess && (
-                    <p className="text-xs text-green-600">✓ Reply sent successfully</p>
-                  )}
-
-                  <button
-                    onClick={handleSend}
-                    disabled={sending || !draftBody.trim() || !draftMsgId}
-                    className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-                  >
-                    {sending ? 'Sending…' : 'Approve & Send →'}
-                  </button>
-                </div>
-              )}
-          </div>)}
-
-            </aside>
+                );
+              })}
+            </div>
           )}
-        </div>
+        </section>
 
       </div>
 
-      {/* ── Paste modal ── */}
+      {/* ── MODAL: Log CRO response ── */}
       {showPasteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-4 backdrop-blur">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-4 backdrop-blur"
+          onClick={e => { if (e.target === e.currentTarget) { setShowPasteModal(false); setPasteError(''); } }}>
           <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 space-y-4 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1412,35 +1121,20 @@ export default function EngagementThreadPage() {
                   Paste {engagement.cro_name}&apos;s email reply. AI will analyse it and draft a follow-up.
                 </p>
               </div>
-              <button
-                onClick={() => { setShowPasteModal(false); setPasteError(''); }}
-                className="text-gray-500 hover:text-gray-700 text-xl leading-none shrink-0"
-              >×</button>
+              <button onClick={() => { setShowPasteModal(false); setPasteError(''); }}
+                className="text-gray-500 hover:text-gray-600 text-xl leading-none shrink-0">×</button>
             </div>
-
-            <textarea
-              value={pastedResponse}
-              onChange={e => setPastedResponse(e.target.value)}
-              placeholder="Paste CRO's email response here…"
-              rows={10}
-              autoFocus
-              className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-
+            <textarea value={pastedResponse} onChange={e => setPastedResponse(e.target.value)}
+              placeholder="Paste CRO's email response here…" rows={10} autoFocus
+              className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             {pasteError && <p className="text-xs text-red-600">⚠ {pasteError}</p>}
-
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => { setShowPasteModal(false); setPasteError(''); }}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
+              <button onClick={() => { setShowPasteModal(false); setPasteError(''); }}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
                 Cancel
               </button>
-              <button
-                onClick={handleLogResponse}
-                disabled={pasteLoading || !pastedResponse.trim()}
-                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-              >
+              <button onClick={handleLogResponse} disabled={pasteLoading || !pastedResponse.trim()}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500">
                 {pasteLoading ? 'Saving & analysing…' : 'Save & analyse →'}
               </button>
             </div>
@@ -1448,74 +1142,267 @@ export default function EngagementThreadPage() {
         </div>
       )}
 
-      {/* ── Meeting notes modal (Task 5.1) ── */}
+      {/* ── MODAL: Log meeting notes ── */}
       {showNotesModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-4 backdrop-blur">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-4 backdrop-blur"
+          onClick={e => { if (e.target === e.currentTarget) { setShowNotesModal(false); setNotesError(''); } }}>
           <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 space-y-4 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Log meeting notes</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Paste your call notes or transcript. AI will analyse them and produce a debrief.
+                  Paste your call notes or transcript. AI will analyse them — confirmed items, concerns, and RFP refinements will appear alongside your email analysis.
                   Any format accepted — bullets, prose, Otter.ai transcript, Zoom summary.
                 </p>
               </div>
-              <button
-                onClick={() => { setShowNotesModal(false); setNotesError(''); }}
-                className="text-gray-500 hover:text-gray-700 text-xl leading-none shrink-0"
-              >×</button>
+              <button onClick={() => { setShowNotesModal(false); setNotesError(''); }}
+                className="text-gray-500 hover:text-gray-600 text-xl leading-none shrink-0">×</button>
             </div>
-
-            {/* Optional metadata */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-gray-500">Meeting date (optional)</label>
-                <input
-                  type="date"
-                  value={meetingDateInput}
-                  onChange={e => setMeetingDateInput(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                />
+                <input type="date" value={meetingDateInput} onChange={e => setMeetingDateInput(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-gray-500">Attendees (optional)</label>
-                <input
-                  type="text"
-                  value={attendeesInput}
-                  onChange={e => setAttendeesInput(e.target.value)}
+                <input type="text" value={attendeesInput} onChange={e => setAttendeesInput(e.target.value)}
                   placeholder="e.g. Dr. Chen (CRO), you"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                />
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500" />
               </div>
             </div>
-
-            <textarea
-              value={rawNotes}
-              onChange={e => setRawNotes(e.target.value)}
-              placeholder="Paste meeting notes or call transcript here…"
-              rows={14}
-              autoFocus
-              className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-            />
-
+            <textarea value={rawNotes} onChange={e => setRawNotes(e.target.value)}
+              placeholder="Paste meeting notes or call transcript here…" rows={14} autoFocus
+              className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500" />
             {notesError && <p className="text-xs text-red-600">⚠ {notesError}</p>}
-
             <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => { setShowNotesModal(false); setNotesError(''); }}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
+              <button onClick={() => { setShowNotesModal(false); setNotesError(''); }}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
                 Cancel
               </button>
-              <button
-                onClick={handleLogMeetingNotes}
-                disabled={notesLoading || !rawNotes.trim()}
-                className="rounded-lg bg-purple-700 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-              >
+              <button onClick={handleLogMeetingNotes} disabled={notesLoading || !rawNotes.trim()}
+                className="rounded-lg bg-purple-700 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500">
                 {notesLoading ? 'Saving & analysing…' : 'Save & analyse →'}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Log quote ── */}
+      {showQuoteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-4 backdrop-blur"
+          onClick={e => { if (e.target === e.currentTarget) { setShowQuoteModal(false); setQuoteError(''); } }}>
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Log quote from {engagement.cro_name}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Record the price and timeline they quoted. No RFP needed.
+                </p>
+              </div>
+              <button onClick={() => { setShowQuoteModal(false); setQuoteError(''); }}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0">×</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500">Amount *</label>
+                <input type="number" min="0" step="0.01" value={quoteAmount}
+                  onChange={e => setQuoteAmount(e.target.value)} placeholder="e.g. 45000" autoFocus
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500">Currency</label>
+                <select value={quoteCurrency} onChange={e => setQuoteCurrency(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                  <option>USD</option><option>EUR</option><option>GBP</option><option>CAD</option><option>AUD</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500">Timeline (optional)</label>
+                <input type="text" value={quoteTimeline} onChange={e => setQuoteTimeline(e.target.value)}
+                  placeholder="e.g. 8–10 weeks"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500">Valid until (optional)</label>
+                <input type="date" value={quoteValidUntil} onChange={e => setQuoteValidUntil(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500">Notes (optional)</label>
+              <textarea value={quoteNotes} onChange={e => setQuoteNotes(e.target.value)}
+                placeholder="e.g. price includes GLP report, excludes histopathology" rows={3}
+                className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+            </div>
+            {quoteError && <p className="text-xs text-red-600">⚠ {quoteError}</p>}
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setShowQuoteModal(false); setQuoteError(''); }}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleSaveQuote} disabled={savingQuote || !quoteAmount.trim()}
+                className="rounded-lg bg-teal-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400">
+                {savingQuote ? 'Saving…' : 'Save quote →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Meeting invite ── */}
+      {showMeetingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-4 backdrop-blur"
+          onClick={e => { if (e.target === e.currentTarget) closeMeetingModal(); }}>
+          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Schedule a meeting</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  AI will draft a meeting request email with your booking link. Review and send.
+                </p>
+              </div>
+              <button onClick={closeMeetingModal}
+                className="text-gray-500 hover:text-gray-600 text-xl leading-none shrink-0">×</button>
+            </div>
+
+            {noSchedulingLink && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+                <p className="text-sm font-medium text-amber-700">Booking link not set</p>
+                <p className="text-xs text-amber-700">
+                  Add your Calendly or Cal.com booking URL in settings so the invite can include it.
+                </p>
+                <a href="/biotech/settings"
+                  className="inline-block text-xs text-blue-500 hover:text-blue-400 transition-colors underline">
+                  Open settings →
+                </a>
+              </div>
+            )}
+
+            {!meetingBody && !meetingLoading && !noSchedulingLink && (
+              <>
+                {meetingError && (
+                  <p className="text-xs text-red-600 rounded-lg border border-red-800/40 bg-red-950/20 px-3 py-2">
+                    ⚠ {meetingError}
+                  </p>
+                )}
+                <button onClick={handleGenerateMeetingInvite}
+                  className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
+                  ✦ Generate invite draft →
+                </button>
+              </>
+            )}
+
+            {meetingLoading && (
+              <div className="flex items-center gap-3 text-sm text-gray-500 py-2">
+                <Spinner color="purple" />
+                Drafting meeting invite…
+              </div>
+            )}
+
+            {meetingBody && !meetingLoading && (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-purple-700">
+                    Review &amp; edit draft
+                  </p>
+                  <button
+                    onClick={() => { setMeetingBody(''); setMeetingMsgId(null); setMeetingError(''); handleGenerateMeetingInvite(); }}
+                    className="text-[10px] text-gray-500 hover:text-gray-600 transition-colors">
+                    ↺ Re-draft
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-gray-500">Subject</p>
+                  <input type="text" value={meetingSubject} onChange={e => setMeetingSubject(e.target.value)}
+                    disabled={meetingSent}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60" />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-gray-500">Message</p>
+                  <textarea value={meetingBody} onChange={e => setMeetingBody(e.target.value)}
+                    disabled={meetingSent} rows={9}
+                    className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60" />
+                </div>
+                {meetingError && <p className="text-xs text-red-600">⚠ {meetingError}</p>}
+                {!meetingSent && (
+                  <button onClick={handleSendMeetingInvite}
+                    disabled={meetingLoading || !meetingBody.trim() || !meetingMsgId}
+                    className="w-full rounded-lg bg-purple-700 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500">
+                    {meetingLoading ? 'Sending…' : 'Approve & Send invite →'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Small sub-components to keep render readable ──────────────────────────────
+
+function ConfirmedCollapsible({ items }: { items: TaggedItem[] }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="space-y-1">
+      <button onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-green-800 dark:text-green-300 hover:text-green-900 dark:hover:text-green-200 transition-colors">
+        <span className="text-green-600 dark:text-green-400">✓</span>
+        <span>Confirmed ({items.length})</span>
+        <svg className={`h-3 w-3 text-green-600 dark:text-green-400 transition-transform ${open ? '' : '-rotate-90'}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="space-y-1.5 pt-1">
+          {items.map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-xs text-green-900 dark:text-green-100">
+              <span className="mt-0.5 shrink-0 text-green-600 dark:text-green-400">✓</span>
+              <span className="flex-1">{item.text}<SourceTag source={item.source} /></span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SuggestedQuestionsCollapsible({
+  questions, selected, onToggle
+}: {
+  questions: string[];
+  selected: Set<number>;
+  onToggle: (i: number) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="space-y-1">
+      <button onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-gray-600 hover:text-gray-800 transition-colors">
+        <span>Suggested questions ({questions.length})</span>
+        <svg className={`h-3 w-3 text-gray-400 transition-transform ${open ? '' : '-rotate-90'}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="space-y-2 pt-1">
+          <p className="text-[10px] text-gray-500">Check to insert into reply draft</p>
+          {questions.map((q, i) => (
+            <label key={i} className="flex items-start gap-2.5 cursor-pointer group">
+              <input type="checkbox" checked={selected.has(i)} onChange={() => onToggle(i)}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-gray-300 bg-white text-blue-500 focus:ring-blue-500" />
+              <span className={`text-xs leading-relaxed transition-colors ${
+                selected.has(i) ? 'text-blue-600' : 'text-gray-500 group-hover:text-gray-700'
+              }`}>{q}</span>
+            </label>
+          ))}
         </div>
       )}
     </div>

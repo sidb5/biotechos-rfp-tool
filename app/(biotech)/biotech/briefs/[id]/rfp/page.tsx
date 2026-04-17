@@ -532,7 +532,7 @@ export default function RfpEditorPage() {
                       </p>
                       <ul className="space-y-1.5">
                         {refinements.map(n => (
-                          <li key={n.id} className="flex items-start gap-2 text-xs text-gray-400">
+                          <li key={n.id} className="flex items-start gap-2 text-xs text-gray-500">
                             <span className="mt-0.5 shrink-0 text-blue-600">→</span>
                             <span className="flex-1">{n.text}</span>
                             <span className="shrink-0 text-[10px] text-gray-700">{n.source_cro_name}</span>
@@ -550,7 +550,7 @@ export default function RfpEditorPage() {
                       </p>
                       <ul className="space-y-1.5">
                         {openQuestions.map(n => (
-                          <li key={n.id} className="flex items-start gap-2 text-xs text-gray-400">
+                          <li key={n.id} className="flex items-start gap-2 text-xs text-gray-500">
                             <span className="mt-0.5 shrink-0 text-amber-600">?</span>
                             <span className="flex-1">{n.text}</span>
                             <span className="shrink-0 text-[10px] text-gray-700">{n.source_cro_name}</span>
@@ -813,7 +813,7 @@ export default function RfpEditorPage() {
                   ) : saveStatus === 'saved' ? (
                     <span className="text-green-500">✓ Saved</span>
                   ) : (
-                    <span className="text-gray-400">auto-save on</span>
+                    <span className="text-gray-500">auto-save on</span>
                   )}
                 </span>
               </div>
@@ -831,7 +831,7 @@ export default function RfpEditorPage() {
                 >
                   {currentText
                     ? <RenderedSection text={currentText} />
-                    : <p className="text-sm text-gray-400 italic">No content yet — switch to Edit to write.</p>
+                    : <p className="text-sm text-gray-500 italic">No content yet — switch to Edit to write.</p>
                   }
                   {hasGaps && (
                     <p className="mt-4 text-[10px] text-amber-700">
@@ -856,7 +856,7 @@ export default function RfpEditorPage() {
               )}
 
               {/* Section footer */}
-              <div className="flex items-center justify-between text-xs text-gray-400">
+              <div className="flex items-center justify-between text-xs text-gray-500">
                 <span>{currentText.length} chars</span>
                 <span>⊙ save as template · edits auto-save</span>
               </div>

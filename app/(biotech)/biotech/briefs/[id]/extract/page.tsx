@@ -142,7 +142,7 @@ export default function ExtractPage() {
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
         <p className="text-sm">Extracting structured brief…</p>
-        <p className="text-xs text-gray-400">Our AI algorithm is reading your inputs. This takes 5–10 seconds.</p>
+        <p className="text-xs text-gray-500">Our AI algorithm is reading your inputs. This takes 5–10 seconds.</p>
       </div>
     );
   }
@@ -293,7 +293,7 @@ export default function ExtractPage() {
 
         {/* Classification (derived from extraction) */}
         {extracted?.classification && (
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
             <span>Auto-classified as:</span>
             <span className="rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2.5 py-0.5 font-medium uppercase tracking-wide">
               {extracted.classification}
