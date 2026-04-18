@@ -86,7 +86,7 @@
       }
     }, [
       el('span', { cls: klass('quote-btn-icon'), attrs: { 'aria-hidden': 'true' } }),
-      el('span', { cls: klass('quote-btn-label'), text: '✦ Quote' })
+      el('span', { cls: klass('quote-btn-label'), text: 'Quote' })
     ]);
 
     btn.addEventListener('click', (e) => {

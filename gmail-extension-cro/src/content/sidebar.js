@@ -19,12 +19,20 @@
   }
 
   // ── State ──────────────────────────────────────────────────────────────────
-  let sidebarEl  = null;
-  let phase      = 'idle';
-  let session    = null;
-  let retryArgs  = null;
-  let activeBtn  = null;  // trigger button — restore focus on close
-  let prevFocus  = null;  // element focused before sidebar opened
+  let sidebarEl   = null;
+  let phase       = 'idle';
+  let session     = null;
+  let retryArgs   = null;
+  let activeBtn   = null;
+  let prevFocus   = null;
+  let sidebarTheme = 'light';
+
+  function applyTheme() {
+    document.body.setAttribute('data-cro-qg-theme', sidebarTheme);
+    if (!sidebarEl) return;
+    const btn = sidebarEl.querySelector(`[data-${CFG.CSS_PREFIX}mark="theme-btn"]`);
+    if (btn) btn.textContent = sidebarTheme === 'dark' ? '☀' : '🌙';
+  }
 
   // ── API proxy ──────────────────────────────────────────────────────────────
   function apiCall(method, args) {
@@ -92,6 +100,13 @@
 
     document.body.appendChild(sidebarEl);
     document.addEventListener('keydown', onKeyDown, true);
+
+    try {
+      chrome.storage.local.get('biotechos_theme', (result) => {
+        sidebarTheme = result.biotechos_theme || 'light';
+        applyTheme();
+      });
+    } catch { applyTheme(); }
 
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
@@ -244,6 +259,18 @@
     closeBtn.innerHTML = '&times;';
     closeBtn.addEventListener('click', closeSidebar);
 
+    const themeBtn = el('button', {
+      cls:   klass('sb-theme-btn'),
+      attrs: { type: 'button', title: 'Toggle theme', [`data-${CFG.CSS_PREFIX}mark`]: 'theme-btn' },
+      text:  sidebarTheme === 'dark' ? '☀' : '🌙'
+    });
+    themeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sidebarTheme = sidebarTheme === 'light' ? 'dark' : 'light';
+      applyTheme();
+      try { chrome.storage.local.set({ biotechos_theme: sidebarTheme }); } catch {}
+    });
+
     const children = [
       closeBtn,
       el('h2', { cls: klass('sb-title'), text: title })
@@ -253,11 +280,13 @@
       const regenBtn = el('button', {
         cls: klass('sb-btn', 'sb-btn--ghost'),
         text: '↺ Regenerate',
-        attrs: { type: 'button', title: 'Ask Claude for a new scope paragraph' }
+        attrs: { type: 'button', title: 'Ask AI for a new scope paragraph' }
       });
       regenBtn.addEventListener('click', () => handleRegen(proposalId, regenBtn));
       children.push(regenBtn);
     }
+
+    children.push(themeBtn);
 
     return el('div', { cls: klass('sb-header') }, children);
   }
@@ -530,7 +559,7 @@
       const proposalId = created?.proposal_id;
       if (!proposalId) throw new Error('Failed to create proposal in BiotechOS.');
 
-      setLoadingText('Writing scope with Claude…', 3, 3);
+      setLoadingText('Writing scope with AI…', 3, 3);
       const scopeResult = await apiCall('generateScope', { proposal_id: proposalId });
 
       const assayTypes = Array.isArray(parsed?.assay_types) ? parsed.assay_types : [];

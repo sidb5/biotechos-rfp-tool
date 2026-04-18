@@ -634,67 +634,65 @@
   background: #f8f9fa;
 }
 
-/* ── Dark mode support (Gmail's dark theme sets a body class) ───────────── */
-@media (prefers-color-scheme: dark) {
-  .cro-qg-badge {
-    background: #2d2e30;
-    color: #e8eaed;
-    box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      0 2px 6px 2px rgba(0, 0, 0, 0.3);
-  }
-
-  .cro-qg-sidebar {
-    background: #202124;
-    color: #e8eaed;
-    border-left-color: #3c4043;
-  }
-
-  .cro-qg-sb-header, .cro-qg-sb-footer { background: #292a2d; border-color: #3c4043; }
-  .cro-qg-sb-title  { color: #e8eaed; }
-  .cro-qg-sb-close  { color: #9aa0a6; }
-  .cro-qg-sb-close:hover { background: #3c4043; color: #e8eaed; }
-
-  .cro-qg-sb-card   { background: #292a2d; border-color: #3c4043; }
-  .cro-qg-sb-chip   { background: #1e3a5f; color: #8ab4f8; }
-
-  .cro-qg-sb-section-title { color: #9aa0a6; }
-  .cro-qg-sb-textarea,
-  .cro-qg-sb-input  { background: #2d2e30; color: #e8eaed; border-color: #3c4043; }
-
-  .cro-qg-sb-pricing-head { border-bottom-color: #3c4043; }
-  .cro-qg-sb-pricing-total { color: #e8eaed; }
-
-  .cro-qg-sb-btn--primary    { background: #8ab4f8; color: #202124; }
-  .cro-qg-sb-btn--secondary  { background: #292a2d; color: #8ab4f8; border-color: #3c4043; }
-  .cro-qg-sb-btn--ghost      { color: #9aa0a6; }
-  .cro-qg-sb-btn--add        { border-color: #3c4043; color: #8ab4f8; }
-
-  .cro-qg-sb-skeleton-card  { background: #292a2d; border-color: #3c4043; }
-  .cro-qg-sb-status-box  { background: #1e3a5f; border-color: #2d4a7a; }
-  .cro-qg-sb-status-dot  { background: #8ab4f8; }
-  .cro-qg-sb-loading-text { color: #8ab4f8; }
-  .cro-qg-sb-loading-step::after { background: #3c4043; }
-  .cro-qg-sb-loading-step::before { background: #8ab4f8; }
-  .cro-qg-sb-shimmer        {
-    background: linear-gradient(90deg, #3c4043 25%, #535457 50%, #3c4043 75%);
-    background-size: 200% 100%;
-  }
-
-  .cro-qg-sb-pricing-row--total { border-top-color: #3c4043; }
-  .cro-qg-sb-pricing-grand      { color: #e8eaed; }
-  .cro-qg-sb-pricing-grand-label { color: #9aa0a6; }
-
-  .cro-qg-quote-btn {
-    background: #2d2e30;
-    color: #8ab4f8;
-    border-color: #3c4043;
-  }
-  .cro-qg-quote-btn:hover {
-    background: #1e3a5f;
-    border-color: #8ab4f8;
-  }
+/* ── Theme toggle button ────────────────────────────────────────────────── */
+.cro-qg-sb-theme-btn {
+  background: none; border: none; font-size: 15px;
+  cursor: pointer; padding: 4px 8px; border-radius: 4px;
+  line-height: 1; flex-shrink: 0;
+  color: #5f6368;
 }
+.cro-qg-sb-theme-btn:hover { background: #e8eaed; color: #202124; }
+
+/* ── Dark theme — toggled via body[data-cro-qg-theme="dark"] ────────────── */
+body[data-cro-qg-theme="dark"] .cro-qg-badge {
+  background: #2d2e30; color: #e8eaed;
+  box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 6px 2px rgba(0,0,0,.3);
+}
+
+body[data-cro-qg-theme="dark"] .cro-qg-sidebar {
+  background: #202124; color: #e8eaed; border-left-color: #3c4043;
+}
+
+body[data-cro-qg-theme="dark"] .cro-qg-sb-header,
+body[data-cro-qg-theme="dark"] .cro-qg-sb-footer { background: #292a2d; border-color: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-title  { color: #e8eaed; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-close  { color: #9aa0a6; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-close:hover { background: #3c4043; color: #e8eaed; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-theme-btn       { color: #9aa0a6; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-theme-btn:hover { background: #3c4043; color: #e8eaed; }
+
+body[data-cro-qg-theme="dark"] .cro-qg-sb-card   { background: #292a2d; border-color: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-chip   { background: #1e3a5f; color: #8ab4f8; }
+
+body[data-cro-qg-theme="dark"] .cro-qg-sb-section-title { color: #9aa0a6; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-textarea,
+body[data-cro-qg-theme="dark"] .cro-qg-sb-input  { background: #2d2e30; color: #e8eaed; border-color: #3c4043; }
+
+body[data-cro-qg-theme="dark"] .cro-qg-sb-pricing-head  { border-bottom-color: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-pricing-total { color: #e8eaed; }
+
+body[data-cro-qg-theme="dark"] .cro-qg-sb-btn--primary   { background: #8ab4f8; color: #202124; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-btn--secondary { background: #292a2d; color: #8ab4f8; border-color: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-btn--ghost     { color: #9aa0a6; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-btn--add       { border-color: #3c4043; color: #8ab4f8; }
+
+body[data-cro-qg-theme="dark"] .cro-qg-sb-skeleton-card { background: #292a2d; border-color: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-status-box    { background: #1e3a5f; border-color: #2d4a7a; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-status-dot    { background: #8ab4f8; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-loading-text  { color: #8ab4f8; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-loading-step::after  { background: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-loading-step::before { background: #8ab4f8; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-shimmer {
+  background: linear-gradient(90deg, #3c4043 25%, #535457 50%, #3c4043 75%);
+  background-size: 200% 100%;
+}
+
+body[data-cro-qg-theme="dark"] .cro-qg-sb-pricing-row--total  { border-top-color: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-pricing-grand       { color: #e8eaed; }
+body[data-cro-qg-theme="dark"] .cro-qg-sb-pricing-grand-label { color: #9aa0a6; }
+
+body[data-cro-qg-theme="dark"] .cro-qg-quote-btn       { background: #2d2e30; color: #8ab4f8; border-color: #3c4043; }
+body[data-cro-qg-theme="dark"] .cro-qg-quote-btn:hover { background: #1e3a5f; border-color: #8ab4f8; }
 
 /* ── Toast notifications (Task 5) ───────────────────────────────────────── */
 .cro-qg-toast {
