@@ -53,9 +53,10 @@ export default async function ActionsNeededPage() {
     }
   }
 
-  // 1. Upcoming deadlines within 7 days
+  // 1. Upcoming deadlines within 7 days — only for proposals not yet submitted
   for (const p of allProposals) {
     if (p.outcome === 'won' || p.outcome === 'lost') continue;
+    if (p.status === 'complete') continue; // already submitted — no longer urgent
     const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: { submission_deadline?: string } } | null;
     const deadline = rfpData?.parsed_summary?.submission_deadline;
     if (!deadline) continue;
