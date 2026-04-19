@@ -2,10 +2,12 @@
 //
 // Rules:
 //   1. Reject free consumer email providers and disposable providers.
-//   2. In non-production environments ONLY, a comma-separated dev allowlist
-//      of exact email addresses can bypass the check.
-//   3. In production (NODE_ENV === 'production'), the allowlist is ignored
-//      entirely — no bypass, regardless of what the env var says.
+//   2. A comma-separated dev allowlist of exact email addresses can bypass
+//      the check when DEV_EMAIL_ALLOWLIST (server) or
+//      NEXT_PUBLIC_DEV_EMAIL_ALLOWLIST (client) is set.
+//      Leave the env var unset in real production to enforce the block for everyone.
+//   NOTE: NODE_ENV is NOT used as a guard — Vercel always sets NODE_ENV=production,
+//         so using it would permanently disable the allowlist on all Vercel deployments.
 //
 // Client usage:  reads NEXT_PUBLIC_DEV_EMAIL_ALLOWLIST (baked in at build time)
 // Server usage:  reads DEV_EMAIL_ALLOWLIST (preferred) or NEXT_PUBLIC_DEV_EMAIL_ALLOWLIST
@@ -63,13 +65,12 @@ export function isBlockedDomain(email: string): boolean {
 }
 
 /**
- * Returns true if the exact email address is in the dev allowlist AND
- * we are NOT running in production mode.
- * In production (NODE_ENV === 'production'), always returns false.
+ * Returns true if the exact email address is in the dev allowlist.
+ * The bypass is controlled purely by whether the env var is set — not by NODE_ENV,
+ * because Vercel always runs with NODE_ENV=production regardless of environment.
+ * Leave DEV_EMAIL_ALLOWLIST unset in real production to enforce the block for everyone.
  */
 export function isDevAllowlisted(email: string): boolean {
-  if (process.env.NODE_ENV === 'production') return false;
-
   // Server-side prefers the non-public var; client-side gets the NEXT_PUBLIC_ one
   const rawList: string =
     process.env.DEV_EMAIL_ALLOWLIST ??
