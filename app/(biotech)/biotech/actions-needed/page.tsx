@@ -69,7 +69,7 @@ export default function ActionsNeededPage() {
       }
 
       // Only surface engagements where the most recent AI draft is still pending
-      const pendingEngagementIds = [...latestAiMap.entries()]
+      const pendingEngagementIds = Array.from(latestAiMap.entries())
         .filter(([, m]) => m.status === 'draft')
         .map(([id]) => id);
 
