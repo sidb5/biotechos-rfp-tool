@@ -7,6 +7,7 @@ import { canAccess } from '@shared/lib/feature-flags';
 import { supabase } from '@shared/lib/supabase';
 import { quoteSentTemplate } from '@shared/lib/email-templates';
 import ProposalEditor from '@cro/components/ProposalEditor';
+import ArchiveButton from '@cro/components/ArchiveButton';
 import type { ProposalSection } from '@cro/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -1145,6 +1146,11 @@ export default function QuoteBuilder({
               <span className="ml-auto text-xs font-semibold text-gray-400 uppercase tracking-wide">
                 {data.mode === 'full_proposal' ? 'RFP Bid' : 'Quick Quote'}
               </span>
+              <ArchiveButton
+                proposalId={proposalId}
+                redirectTo={data.mode === 'full_proposal' ? '/requests' : '/quotes'}
+                label="Archive"
+              />
             </div>
 
             {/* ── Original request (collapsible) ───────────────────────── */}

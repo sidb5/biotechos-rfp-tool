@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import AppShell from '@shared/components/AppShell';
+import ArchiveButton from '@cro/components/ArchiveButton';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -28,8 +29,9 @@ export default async function RequestsPage() {
     .eq('cro_id', profile.id)
     .order('created_at', { ascending: false });
 
-  // Show only formal RFP responses on this page
+  // Show only formal RFP responses on this page, excluding archived ones
   const rfpResponses = (proposals ?? []).filter(p => {
+    if (p.status === 'archived') return false;
     const rfpData = p.rfps as { parsed_summary?: { request_type?: string } } | null;
     const mode = (p.quote_data as { mode?: string } | null)?.mode;
     return rfpData?.parsed_summary?.request_type === 'formal_rfp' || mode === 'full_proposal';
@@ -69,10 +71,10 @@ export default async function RequestsPage() {
               };
               const statusColor = statusColors[p.status ?? ''] ?? 'bg-gray-100 text-gray-500';
               return (
-                <li key={p.id}>
+                <li key={p.id} className="flex items-center">
                   <a
                     href={`/rfp/${p.id}`}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors"
+                    className="flex flex-1 items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors min-w-0"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
@@ -89,6 +91,9 @@ export default async function RequestsPage() {
                       View →
                     </span>
                   </a>
+                  <div className="pr-4 shrink-0">
+                    <ArchiveButton proposalId={p.id} redirectTo="/requests" variant="icon" />
+                  </div>
                 </li>
               );
             })}

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 
 export async function GET(
@@ -49,4 +49,43 @@ export async function GET(
   }
 
   return NextResponse.json({ proposal, sections: sections ?? [] });
+}
+
+// PATCH /api/proposal/[id] — archive (soft-delete) a proposal/quote
+export async function PATCH(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const proposalId = params.id;
+
+  // Verify ownership
+  const { data: proposal } = await supabase
+    .from('proposals')
+    .select('id, cro_id')
+    .eq('id', proposalId)
+    .single();
+
+  if (!proposal) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const { data: profile } = await supabase
+    .from('cro_profiles')
+    .select('id')
+    .eq('id', proposal.cro_id)
+    .eq('user_id', user.id)
+    .single();
+
+  if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const { error } = await supabase
+    .from('proposals')
+    .update({ status: 'archived', updated_at: new Date().toISOString() })
+    .eq('id', proposalId);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }
