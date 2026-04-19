@@ -27,12 +27,24 @@ export default async function ActionsNeededPage() {
 
   const { data: proposals } = await supabase
     .from('proposals')
-    .select('id, status, outcome, created_at, updated_at, share_last_viewed_at, rfps(biotech_name, parsed_summary)')
+    .select('id, status, outcome, created_at, updated_at, share_last_viewed_at, rfps(biotech_name, parsed_summary, created_at)')
     .eq('cro_id', profile.id)
     .order('created_at', { ascending: false });
 
   const allProposals = proposals ?? [];
   const attentionItems: AttentionItem[] = [];
+
+  // Resolve a human-readable client name from RFP data.
+  // Falls back through: biotech_name → parsed_summary.company_name → parsed_summary.client_name
+  // → "RFP from [date]" if nothing else is available.
+  function clientName(rfpData: { biotech_name?: string | null; parsed_summary?: Record<string, unknown> | null; created_at?: string | null } | null): string {
+    if (rfpData?.biotech_name) return rfpData.biotech_name;
+    const ps = rfpData?.parsed_summary ?? {};
+    const fromPs = (ps['company_name'] ?? ps['client_name'] ?? ps['sponsor_name']) as string | undefined;
+    if (fromPs) return fromPs;
+    if (rfpData?.created_at) return `RFP from ${new Date(rfpData.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    return 'Unknown client';
+  }
   const nowMs = Date.now();
   const fortyEightHoursAgo = new Date(nowMs - 48 * 3600_000);
   const fourteenDaysAgo = new Date(nowMs - 14 * 86_400_000);
@@ -40,12 +52,12 @@ export default async function ActionsNeededPage() {
   // 0. Quote viewed recently (highest priority)
   const sixtyMinsAgo = new Date(nowMs - 60 * 60_000);
   for (const p of allProposals) {
-    const rfpData = p.rfps as { biotech_name?: string } | null;
+    const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: Record<string, unknown>; created_at?: string } | null;
     const lastViewed = (p as Record<string, unknown>).share_last_viewed_at as string | null;
     if (lastViewed && new Date(lastViewed) > sixtyMinsAgo) {
       attentionItems.push({
         key: `viewed-${p.id}`,
-        label: `Follow up with ${rfpData?.biotech_name ?? 'client'} — viewed your quote just now`,
+        label: `Follow up with ${clientName(rfpData)} — viewed your quote just now`,
         actionLabel: 'Follow up →',
         actionHref: `/quote/${p.id}`,
         priority: 'urgent',
@@ -57,15 +69,15 @@ export default async function ActionsNeededPage() {
   for (const p of allProposals) {
     if (p.outcome === 'won' || p.outcome === 'lost') continue;
     if (p.status === 'complete') continue; // already submitted — no longer urgent
-    const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: { submission_deadline?: string } } | null;
-    const deadline = rfpData?.parsed_summary?.submission_deadline;
+    const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: Record<string, unknown>; created_at?: string } | null;
+    const deadline = (rfpData?.parsed_summary as { submission_deadline?: string } | undefined)?.submission_deadline;
     if (!deadline) continue;
     const daysUntil = Math.ceil((new Date(deadline).getTime() - nowMs) / 86_400_000);
     if (daysUntil >= 0 && daysUntil <= 7) {
       const when = daysUntil === 0 ? 'today' : `in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`;
       attentionItems.push({
         key: `deadline-${p.id}`,
-        label: `Submit ${rfpData?.biotech_name ?? 'Unknown client'} proposal — deadline ${when}`,
+        label: `Submit ${clientName(rfpData)} proposal — deadline ${when}`,
         actionLabel: 'Edit proposal →',
         actionHref: `/quote/${p.id}`,
         priority: 'urgent',
@@ -75,14 +87,14 @@ export default async function ActionsNeededPage() {
 
   // 2. Draft quotes not sent after 48 hours
   for (const p of allProposals) {
-    const rfpData = p.rfps as { biotech_name?: string } | null;
+    const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: Record<string, unknown>; created_at?: string } | null;
     if (
       (p.status === 'draft' || p.status === 'in_progress') &&
       p.created_at && new Date(p.created_at) < fortyEightHoursAgo
     ) {
       attentionItems.push({
         key: `draft-${p.id}`,
-        label: `Finish and send ${rfpData?.biotech_name ?? 'Unknown client'} quote — sitting as draft`,
+        label: `Finish and send ${clientName(rfpData)} quote — sitting as draft`,
         actionLabel: 'Continue →',
         actionHref: `/quote/${p.id}`,
         priority: 'normal',
@@ -92,14 +104,14 @@ export default async function ActionsNeededPage() {
 
   // 3. Submitted proposals with no outcome after 14 days
   for (const p of allProposals) {
-    const rfpData = p.rfps as { biotech_name?: string } | null;
+    const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: Record<string, unknown>; created_at?: string } | null;
     if (
       p.status === 'complete' && !p.outcome &&
       p.updated_at && new Date(p.updated_at) < fourteenDaysAgo
     ) {
       attentionItems.push({
         key: `outcome-${p.id}`,
-        label: `Record win/loss for ${rfpData?.biotech_name ?? 'Unknown client'} — sent 2+ weeks ago`,
+        label: `Record win/loss for ${clientName(rfpData)} — sent 2+ weeks ago`,
         actionLabel: 'Record outcome →',
         actionHref: `/quote/${p.id}`,
         priority: 'low',

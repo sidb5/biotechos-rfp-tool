@@ -2,9 +2,9 @@
 
 // /notifications — CRO in-app notification list (Task 11)
 //
-// Shows all draft-ready notifications for the logged-in CRO user.
+// Shows draft-ready notifications for the logged-in CRO user.
+// Defaults to unread only — toggle "Show history" to see all.
 // Clicking a notification marks it read and navigates to the engagement.
-// "Mark all read" button clears the badge.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter }                                from 'next/navigation';
@@ -32,6 +32,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading]             = useState(true);
   const [markingAll, setMarkingAll]       = useState(false);
+  const [showAll, setShowAll]             = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -53,7 +54,6 @@ export default function NotificationsPage() {
   }, [load, router]);
 
   async function handleClick(notif: Notification) {
-    // Mark as read
     if (!notif.read) {
       await supabase
         .from('notifications')
@@ -61,7 +61,6 @@ export default function NotificationsPage() {
         .eq('id', notif.id);
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
     }
-    // Navigate to engagement
     if (notif.engagement_id) {
       router.push(`/engagements/${notif.engagement_id}`);
     }
@@ -78,6 +77,7 @@ export default function NotificationsPage() {
   }
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const visible     = showAll ? notifications : notifications.filter(n => !n.read);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -91,15 +91,23 @@ export default function NotificationsPage() {
               <p className="text-sm text-gray-500 mt-0.5">{unreadCount} unread</p>
             )}
           </div>
-          {unreadCount > 0 && (
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                disabled={markingAll}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+              >
+                {markingAll ? 'Clearing…' : 'Mark all read'}
+              </button>
+            )}
             <button
-              onClick={handleMarkAllRead}
-              disabled={markingAll}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+              onClick={() => setShowAll(v => !v)}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
             >
-              {markingAll ? 'Clearing…' : 'Mark all read'}
+              {showAll ? 'Unread only' : 'Show history'}
             </button>
-          )}
+          </div>
         </div>
 
         {/* Notification list */}
@@ -110,16 +118,30 @@ export default function NotificationsPage() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           </div>
-        ) : notifications.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
-            <p className="text-gray-500 text-sm">No notifications yet.</p>
-            <p className="text-gray-400 text-xs mt-1">
-              When an AI draft is ready for your review, it will appear here.
-            </p>
+            {showAll ? (
+              <p className="text-gray-500 text-sm">No notifications yet.</p>
+            ) : (
+              <>
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-green-50">
+                  <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-gray-600 text-sm font-medium">All caught up</p>
+                <p className="text-gray-400 text-xs mt-1">No unread notifications.</p>
+                {notifications.length > 0 && (
+                  <button onClick={() => setShowAll(true)} className="mt-3 text-xs text-blue-500 hover:text-blue-600">
+                    View {notifications.length} past notification{notifications.length !== 1 ? 's' : ''}
+                  </button>
+                )}
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
-            {notifications.map(notif => (
+            {visible.map(notif => (
               <button
                 key={notif.id}
                 onClick={() => handleClick(notif)}
@@ -130,13 +152,10 @@ export default function NotificationsPage() {
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  {/* Unread dot */}
                   <div className="mt-1.5 shrink-0">
-                    {notif.read ? (
-                      <div className="h-2 w-2 rounded-full bg-gray-200" />
-                    ) : (
-                      <div className="h-2 w-2 rounded-full bg-blue-600" />
-                    )}
+                    {notif.read
+                      ? <div className="h-2 w-2 rounded-full bg-gray-200" />
+                      : <div className="h-2 w-2 rounded-full bg-blue-600" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 justify-between">
