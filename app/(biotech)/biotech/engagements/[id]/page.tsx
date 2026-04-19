@@ -620,6 +620,22 @@ export default function EngagementThreadPage() {
     }
   }
 
+  async function handleArchive() {
+    setDeleting(true); setDeleteError('');
+    try {
+      const res  = await fetch(`/api/biotech/engagements/${engagementId}`, { method: 'PATCH' });
+      const json = await res.json();
+      if (!res.ok) {
+        setDeleteError((json.error as string) ?? 'Failed to archive');
+        setDeleting(false); setDeleteConfirm(false); return;
+      }
+      router.push('/biotech/engagements');
+    } catch {
+      setDeleteError('Network error — please retry');
+      setDeleting(false); setDeleteConfirm(false);
+    }
+  }
+
   async function handleMarkStage(newStage: 'awarded' | 'closed' | 'rfp_sent') {
     setMarkingStage(newStage); setMarkStageError('');
     try {
@@ -869,29 +885,37 @@ export default function EngagementThreadPage() {
               )}
               {markStageError && <p className="text-xs text-red-600">⚠ {markStageError}</p>}
 
-              {isEnquiryDraft && (
-                <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200">
-                  {!deleteConfirm ? (
-                    <button onClick={() => setDeleteConfirm(true)}
-                      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-red-300 hover:text-red-600">
-                      Delete draft
+              <div className="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200">
+                {!deleteConfirm ? (
+                  <button
+                    onClick={() => setDeleteConfirm(true)}
+                    className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-red-300 hover:text-red-600"
+                  >
+                    {isEnquiryDraft ? 'Delete draft' : 'Archive'}
+                  </button>
+                ) : (
+                  <>
+                    <span className="text-xs text-gray-500 shrink-0">
+                      {isEnquiryDraft ? 'Delete this draft?' : 'Archive this engagement?'}
+                    </span>
+                    <button
+                      onClick={isEnquiryDraft ? handleDelete : handleArchive}
+                      disabled={deleting}
+                      className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                    >
+                      {deleting ? (isEnquiryDraft ? 'Deleting…' : 'Archiving…') : (isEnquiryDraft ? 'Yes, delete' : 'Yes, archive')}
                     </button>
-                  ) : (
-                    <>
-                      <span className="text-xs text-gray-500 shrink-0">Delete this draft?</span>
-                      <button onClick={handleDelete} disabled={deleting}
-                        className="shrink-0 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50">
-                        {deleting ? 'Deleting…' : 'Yes, delete'}
-                      </button>
-                      <button onClick={() => { setDeleteConfirm(false); setDeleteError(''); }} disabled={deleting}
-                        className="shrink-0 text-xs text-gray-500 hover:text-gray-700 transition-colors">
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                  {deleteError && <p className="text-xs text-red-600">⚠ {deleteError}</p>}
-                </div>
-              )}
+                    <button
+                      onClick={() => { setDeleteConfirm(false); setDeleteError(''); }}
+                      disabled={deleting}
+                      className="shrink-0 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+                {deleteError && <p className="text-xs text-red-600">⚠ {deleteError}</p>}
+              </div>
             </div>
           </div>
         </header>

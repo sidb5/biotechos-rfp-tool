@@ -302,6 +302,7 @@ stage       text        default 'enquiry_draft'
             stages: enquiry_draft | enquiry_sent | response_received |
                     followup_draft | followup_sent | meeting_scheduled |
                     meeting_done | rfp_draft | rfp_sent | awarded | closed
+archived    boolean     not null  default false  (soft-delete — hides from all lists)
 created_at  timestamptz
 updated_at  timestamptz (auto-updated via trigger)
 ```

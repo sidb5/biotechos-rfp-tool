@@ -179,6 +179,7 @@ export default function EngagementsPage() {
         .from('cro_engagements')
         .select('id, cro_name, cro_email, stage, updated_at, brief_id, rfp_internal_briefs(title)')
         .eq('user_id', user.id)
+        .eq('archived', false)
         .order('updated_at', { ascending: false });
 
       if (data) setEngagements(data as unknown as Engagement[]);
