@@ -286,7 +286,7 @@ export default function EngagementThreadPage() {
       setDraftBody(data.draft_body);
       if (data.draft_subject) setDraftSubject(data.draft_subject);
       // Move queued items into the permanent drafted set so they stay hidden after regen
-      setDraftedItems(prev => new Set([...prev, ...addedToDraft]));
+      setDraftedItems(prev => new Set([...Array.from(prev), ...Array.from(addedToDraft)]));
       setAddedToDraft(new Set());
       setResolvedAtLastRegen(resolvedGapItems.size);
     } catch {
