@@ -14,9 +14,11 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
 
   const { data: proposal } = await supabase
     .from('proposals')
-    .select('id, cro_id, rfp_id, status, quote_data, share_token, share_enabled, share_views')
+    .select('id, cro_id, rfp_id, status, quote_data, share_token, share_enabled, share_views, engagement_id')
     .eq('id', proposalId)
     .single();
+
+  // engagement_id is set on the proposal once the quote has been sent at least once.
 
   if (!proposal) notFound();
 
@@ -32,7 +34,7 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
 
   const { data: rfp } = await supabase
     .from('rfps')
-    .select('biotech_name, parsed_summary')
+    .select('biotech_name, parsed_summary, raw_text')
     .eq('id', proposal.rfp_id)
     .single();
 
@@ -84,8 +86,8 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
   return (
     <AppShell
       title={`Quote — ${rfp?.biotech_name ?? 'Draft'}`}
-      backHref="/dashboard"
-      backLabel="Proposals"
+      backHref="/quotes"
+      backLabel="Quotes"
       navInLayout
     >
       <QuoteBuilder
@@ -106,6 +108,8 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
         shareEnabled={(proposal as Record<string, unknown>).share_enabled as boolean ?? false}
         shareViews={(proposal as Record<string, unknown>).share_views as number ?? 0}
         plan={plan}
+        rawText={rfp?.raw_text ?? null}
+        engagementId={(proposal as Record<string, unknown>).engagement_id as string | null ?? null}
       />
     </AppShell>
   );

@@ -3,7 +3,11 @@ import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import AppShell from '@shared/components/AppShell';
 import IntakeFlow from '@cro/components/IntakeFlow';
 
-export default async function NewRFPPage() {
+export default async function NewRFPPage({
+  searchParams,
+}: {
+  searchParams: { mode?: string };
+}) {
   const supabase = createSupabaseServerClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -19,8 +23,14 @@ export default async function NewRFPPage() {
     redirect('/profile');
   }
 
+  const mode = searchParams.mode;
+  const title =
+    mode === 'formal_rfp'   ? 'New RFP Response' :
+    mode === 'quick_quote'  ? 'New Quote' :
+    'New request';
+
   return (
-    <AppShell title="New request" navInLayout>
+    <AppShell title={title} navInLayout>
       <IntakeFlow croProfileId={profile.id} />
     </AppShell>
   );

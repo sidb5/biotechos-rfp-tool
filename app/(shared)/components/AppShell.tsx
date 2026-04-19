@@ -9,30 +9,59 @@ import ThemeToggle from '@shared/components/ThemeToggle';
 // ─── Nav structure ─────────────────────────────────────────────────────────
 
 const PRIMARY_NAV = [
-  { href: '/dashboard',      label: 'Dashboard' },
-  { href: '/requests',       label: 'Manage RFPs/Quotes'  },
-  { href: '/actions-needed', label: 'Actions Needed' },
+  {
+    href: '/dashboard', label: 'Dashboard',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
+  },
+  {
+    href: '/quotes', label: 'Quotes',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+  },
+  {
+    href: '/requests', label: 'RFP Bids',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>,
+  },
+  {
+    href: '/actions-needed', label: 'Actions Needed',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
+  },
+  {
+    href: '/notifications', label: 'Notifications',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+  },
 ];
 
 const SECONDARY_NAV = [
-  { href: '/analytics',  label: 'Analytics'   },
-  { href: '/benchmarks', label: 'Benchmarks'  },
-  { href: '/library',    label: 'Library'     },
+  {
+    href: '/analytics', label: 'Analytics',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+  },
+  {
+    href: '/benchmarks', label: 'Benchmarks',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>,
+  },
+  {
+    href: '/library', label: 'Library',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /></svg>,
+  },
 ];
 
 const ACCOUNT_NAV = [
-  { href: '/profile',                label: 'Profile'       },
-  { href: '/settings/billing',       label: 'Billing'       },
-  { href: '/settings/referrals',     label: 'Referrals'     },
-  { href: '/settings/notifications', label: 'Settings' },
+  { href: '/profile',            label: 'Profile'       },
+  { href: '/settings/billing',   label: 'Billing'       },
+  { href: '/settings/referrals', label: 'Referrals'     },
+  { href: '/settings',           label: 'Settings'      },
+  { href: '/settings/notifications', label: 'Notifications' },
 ];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === '/dashboard') return pathname === '/dashboard' || pathname.startsWith('/proposals/') || pathname.startsWith('/quote/');
-  if (href === '/requests')  return pathname === '/requests';
+  if (href === '/dashboard')      return pathname === '/dashboard';
+  if (href === '/quotes')         return pathname === '/quotes' || pathname.startsWith('/quote/');
+  if (href === '/requests')       return pathname === '/requests' || pathname.startsWith('/rfp/') && !pathname.startsWith('/rfp/new');
   if (href === '/actions-needed') return pathname === '/actions-needed';
+  if (href === '/settings')       return pathname === '/settings';
   return pathname.startsWith(href);
 }
 
@@ -60,83 +89,171 @@ function KeyboardShortcutN() {
 function Sidebar({ onSignOut }: { onSignOut: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const accountRef = useRef<HTMLDivElement>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [userInitial, setUserInitial] = useState('U');
+  const [userEmail, setUserEmail]     = useState('');
+
+  // Unread notification count — refreshes every 30 s
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    async function fetchUnread() {
+      const { count } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('read', false);
+      setUnreadCount(count ?? 0);
+    }
+    void fetchUnread();
+    const interval = setInterval(() => { void fetchUnread(); }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch user email for profile pill
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const email = data.user?.email ?? '';
+      setUserEmail(email);
+      setUserInitial((email[0] ?? 'U').toUpperCase());
+    });
+  }, []);
+
+  // Close account popover on outside click
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (accountOpen && accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [accountOpen]);
 
   return (
-    <aside className="hidden md:flex flex-col w-56 shrink-0 bg-white border-r border-gray-100 min-h-screen fixed top-0 left-0 z-20">
-      {/* Logo */}
-      <div className="px-5 pt-5 pb-4 border-b border-gray-100">
-        <p className="text-xs font-bold tracking-widest uppercase text-gray-400">Proposal Engine</p>
+    <aside className="hidden md:flex flex-col w-52 shrink-0 bg-white border-r border-gray-100 h-screen fixed top-0 left-0 z-20">
+
+      {/* ── Logo + create buttons ── */}
+      <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-100">
+        <p className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-3">Proposal Engine</p>
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => router.push('/rfp/new?mode=quick_quote')}
+            className="flex-1 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors"
+          >
+            + Quote
+          </button>
+          <button
+            onClick={() => router.push('/rfp/new?mode=formal_rfp')}
+            className="flex-1 py-1.5 border border-green-600 text-green-700 hover:bg-green-50 text-xs font-semibold rounded-lg transition-colors"
+          >
+            + RFP Bid
+          </button>
+        </div>
       </div>
 
-      {/* + New quote */}
-      <div className="px-4 pt-4">
-        <button
-          onClick={() => router.push('/rfp/new')}
-          className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition-colors flex flex-col items-center justify-center leading-snug"
-        >
-          <span>Create</span>
-          <span>Quote / RFP Response</span>
-        </button>
+      {/* ── Scrollable nav (scrollbar hidden) ── */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto py-2"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}
+      >
+        <nav className="px-3 flex flex-col gap-0.5">
+          {PRIMARY_NAV.map(({ href, label, icon }) => {
+            const active = isActive(pathname, href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-green-50 text-green-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <span className={active ? 'text-green-600' : 'text-gray-400'}>{icon}</span>
+                <span className="flex-1">{label}</span>
+                {href === '/notifications' && unreadCount > 0 && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+                {href === '/actions-needed' && unreadCount > 0 && (
+                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-600 px-1.5 text-[10px] font-bold text-white">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mx-4 my-2 border-t border-gray-100" />
+
+        <nav className="px-3 flex flex-col gap-0.5">
+          {SECONDARY_NAV.map(({ href, label, icon }) => {
+            const active = isActive(pathname, href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-green-50 text-green-700'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                }`}
+              >
+                <span className={active ? 'text-green-600' : 'text-gray-400'}>{icon}</span>
+                <span>{label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Primary nav */}
-      <nav className="px-3 pt-4 flex flex-col gap-0.5">
-        {PRIMARY_NAV.map(({ href, label }) => (
-          <Link
-            key={href}
-            href={href}
-            className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive(pathname, href)
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
+      {/* ── User profile pill — always visible at bottom ── */}
+      <div ref={accountRef} className="shrink-0 p-3 border-t border-gray-100 relative">
+        {/* Account popover — expands upward */}
+        {accountOpen && (
+          <div className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden py-1">
+            {ACCOUNT_NAV.map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setAccountOpen(false)}
+                className={`flex items-center px-4 py-2 text-sm transition-colors ${
+                  isActive(pathname, href)
+                    ? 'text-green-700 bg-green-50'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
+            <div className="mx-3 my-1 border-t border-gray-100" />
+            <ThemeToggle />
+            <button
+              onClick={() => { setAccountOpen(false); onSignOut(); }}
+              className="w-full flex items-center px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
 
-      {/* Divider */}
-      <div className="mx-4 my-3 border-t border-gray-100" />
-
-      {/* Secondary nav */}
-      <nav className="px-3 flex flex-col gap-0.5">
-        {SECONDARY_NAV.map(({ href, label }) => (
-          <Link
-            key={href}
-            href={href}
-            className={`flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-              isActive(pathname, href)
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
-
-      {/* Account — pinned to bottom */}
-      <div className="mt-auto px-3 pb-4 border-t border-gray-100 pt-3">
-        {ACCOUNT_NAV.map(({ href, label }) => (
-          <Link
-            key={href}
-            href={href}
-            className={`flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-              isActive(pathname, href)
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-        <ThemeToggle />
+        {/* The pill button */}
         <button
-          onClick={onSignOut}
-          className="w-full flex items-center px-3 py-2 rounded-lg text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors mt-0.5"
+          onClick={() => setAccountOpen(o => !o)}
+          className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors group"
         >
-          Sign out
+          <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold text-white">{userInitial}</span>
+          </div>
+          <span className="flex-1 text-left text-xs text-gray-600 truncate">{userEmail || 'Account'}</span>
+          <svg
+            className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${accountOpen ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </button>
       </div>
     </aside>
@@ -177,15 +294,16 @@ function MobileMoreDrawer({ open, onClose, onSignOut }: { open: boolean; onClose
 
         <div className="px-4 pb-24 flex flex-col gap-1">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 px-3 mb-2">Analytics</p>
-          {SECONDARY_NAV.map(({ href, label }) => (
+          {SECONDARY_NAV.map(({ href, label, icon }) => (
             <Link
               key={href}
               href={href}
               onClick={onClose}
-              className={`flex items-center px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
                 isActive(pathname, href) ? 'bg-green-50 text-green-700' : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
+              <span className={isActive(pathname, href) ? 'text-green-600' : 'text-gray-400'}>{icon}</span>
               {label}
             </Link>
           ))}
@@ -256,7 +374,7 @@ function MobileTabBar({ onMoreClick }: { onMoreClick: () => void }) {
           <button
             onClick={() => router.push('/rfp/new')}
             className="w-12 h-12 bg-green-600 hover:bg-green-700 text-white text-2xl font-bold rounded-full flex items-center justify-center shadow-lg transition-colors -mt-4"
-            aria-label="New quote"
+            aria-label="New quote or RFP response"
           >
             +
           </button>
@@ -328,7 +446,7 @@ export default function AppShell({ children, title, headerActions, backHref, bac
       <Sidebar onSignOut={handleSignOut} />
 
       {/* Main content — offset by sidebar width on desktop */}
-      <div className="flex-1 md:ml-56 flex flex-col min-h-screen">
+      <div className="flex-1 md:ml-52 flex flex-col min-h-screen">
         {/* Page header */}
         <header className="bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between gap-4 sticky top-0 z-10">
           <div className="flex items-center gap-3 min-w-0">
@@ -375,7 +493,7 @@ export function CRONavShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gray-50 flex">
       <KeyboardShortcutN />
       <Sidebar onSignOut={handleSignOut} />
-      <div className="flex-1 md:ml-56 flex flex-col min-h-screen">
+      <div className="flex-1 md:ml-52 flex flex-col min-h-screen">
         {children}
       </div>
       <MobileTabBar onMoreClick={() => setMoreOpen(true)} />

@@ -18,6 +18,7 @@ function analyzePrompt(text: string): string {
   "confidence": 0-100,
   "can_quote_now": true | false,
   "biotech_name": "company name or null",
+  "biotech_email": "contact email address found in the text (e.g. from signature, From: header, or body) or null",
   "study_type": "type of study or null",
   "assay_types": ["list or empty array"],
   "species": "species or null",

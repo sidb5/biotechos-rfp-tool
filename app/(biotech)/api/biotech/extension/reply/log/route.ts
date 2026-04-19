@@ -64,15 +64,19 @@ export async function POST(req: NextRequest) {
     created_at:   now,
   });
 
-  // Advance stage
-  const nextStage = eng.stage === 'enquiry_sent' ? 'followup_sent'
-    : eng.stage === 'response_received'          ? 'followup_sent'
-    : 'followup_sent';
-
-  await supabase
-    .from('cro_engagements')
-    .update({ stage: nextStage, updated_at: now })
-    .eq('id', engagement_id);
+  // Only advance stage if still in a pre-meeting stage — never regress past meeting_done.
+  const PRE_MEETING_STAGES = ['enquiry_sent', 'followup_sent', 'followup_draft', 'response_received', 'meeting_scheduled'];
+  if (PRE_MEETING_STAGES.includes(eng.stage)) {
+    await supabase
+      .from('cro_engagements')
+      .update({ stage: 'followup_sent', updated_at: now })
+      .eq('id', engagement_id);
+  } else {
+    await supabase
+      .from('cro_engagements')
+      .update({ updated_at: now })
+      .eq('id', engagement_id);
+  }
 
   return NextResponse.json({ ok: true });
 }

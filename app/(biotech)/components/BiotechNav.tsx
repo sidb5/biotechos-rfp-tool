@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ThemeToggle from '@shared/components/ThemeToggle';
 import { supabase } from '@shared/lib/supabase';
 
@@ -10,6 +10,7 @@ const NAV = [
   {
     label: 'Dashboard',
     href:  '/biotech/dashboard',
+    badge: false,
     icon:  (
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -18,8 +19,20 @@ const NAV = [
     ),
   },
   {
+    label: 'Actions Needed',
+    href:  '/biotech/actions-needed',
+    badge: true,
+    icon:  (
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+      </svg>
+    ),
+  },
+  {
     label: 'Study Briefs',
     href:  '/biotech/briefs',
+    badge: false,
     icon:  (
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -30,6 +43,7 @@ const NAV = [
   {
     label: 'Engagements',
     href:  '/biotech/engagements',
+    badge: false,
     icon:  (
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -40,6 +54,7 @@ const NAV = [
   {
     label: 'Settings',
     href:  '/biotech/settings',
+    badge: false,
     icon:  (
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
@@ -55,6 +70,39 @@ export default function BiotechNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    async function fetchUnread() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { count } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+      setUnreadCount(count ?? 0);
+    }
+    void fetchUnread();
+    const interval = setInterval(() => { void fetchUnread(); }, 15_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // When user lands on actions-needed, mark all their notifications read
+  useEffect(() => {
+    if (!pathname.startsWith('/biotech/actions-needed')) return;
+    async function markRead() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+      setUnreadCount(0);
+    }
+    void markRead();
+  }, [pathname]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -82,7 +130,12 @@ export default function BiotechNav() {
           <span className={isActive(item.href) ? 'text-blue-600' : 'text-gray-400'}>
             {item.icon}
           </span>
-          {item.label}
+          <span className="flex-1">{item.label}</span>
+          {item.badge && unreadCount > 0 && (
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </Link>
       ))}
 

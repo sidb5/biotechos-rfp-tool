@@ -363,3 +363,35 @@ updated_at                timestamptz
 ```
 No RLS — admin routes use service role.
 
+---
+
+## Email Infrastructure Tables (Tasks 11–12)
+
+### notifications ✓ CREATED (20260418000004_shared_notifications.sql)
+In-app notification records — one per draft-ready event.
+```
+id            uuid        not null  PK  default gen_random_uuid()
+user_id       uuid        FK → auth.users (cascade delete)
+engagement_id uuid        FK → cro_engagements.id (cascade delete)  nullable
+draft_id      uuid        engagement_messages.id of the AI draft     nullable
+type          text        not null  default 'draft_ready'
+title         text        not null  e.g. "Response from Biotech Corp"
+body_text     text        subtitle shown in notification list
+read          boolean     not null  default false
+created_at    timestamptz not null  default now()
+```
+RLS: user can SELECT and UPDATE their own rows (service role inserts via admin client).
+Index: (user_id, read, created_at DESC) WHERE read = false — fast unread count.
+
+### cro_user_settings ✓ CREATED (20260419000001_cro_user_settings.sql)
+Per-user CRO preferences. Mirrors biotech_user_settings for the CRO persona.
+New users default to 'assisted'. Existing CRO users grandfathered into 'native'.
+```
+id            uuid        not null  PK  default gen_random_uuid()
+user_id       uuid        not null  UNIQUE  FK → auth.users (cascade delete)
+capture_mode  text        not null  default 'assisted'  check: 'assisted' | 'native'
+created_at    timestamptz not null  default now()
+updated_at    timestamptz not null  default now()
+```
+RLS: user can SELECT, INSERT, and UPDATE their own row only.
+

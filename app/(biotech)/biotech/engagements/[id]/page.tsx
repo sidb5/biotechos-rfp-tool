@@ -28,8 +28,10 @@ interface GapAnalysis {
 }
 
 interface MessageAiMetadata {
-  gap_analysis?:   GapAnalysis;
-  resolved_items?: string[];
+  gap_analysis?:    GapAnalysis;
+  resolved_items?:  string[];
+  is_bid_document?: boolean;
+  bid_extracted?:   { amount: number | null; currency: string | null; timeline: string | null } | null;
 }
 
 interface Message {
@@ -51,6 +53,7 @@ interface Engagement {
   cro_email:        string;
   stage:            string;
   brief_id:         string;
+  capture_mode:     'assisted' | 'native';
   quoted_amount:    number | null;
   quoted_currency:  string | null;
   quoted_timeline:  string | null;
@@ -135,6 +138,15 @@ export default function EngagementThreadPage() {
   const [messages, setMessages]     = useState<Message[]>([]);
   const [loading, setLoading]       = useState(true);
 
+  // AI reply draft approval (Task 10)
+  const [aiReplyDraft, setAiReplyDraft]         = useState<Message | null>(null);
+  const [aiReplyBody, setAiReplyBody]           = useState('');
+  const [aiReplySubject, setAiReplySubject]     = useState('');
+  const [aiApproving, setAiApproving]           = useState(false);
+  const [aiDismissing, setAiDismissing]         = useState(false);
+  const [aiApproveError, setAiApproveError]     = useState('');
+  const [aiApproveSent, setAiApproveSent]       = useState(false);
+
   // Inbound paste modal
   const [showPasteModal, setShowPasteModal]   = useState(false);
   const [pastedResponse, setPastedResponse]   = useState('');
@@ -155,6 +167,8 @@ export default function EngagementThreadPage() {
   // Resolved gap tracking
   const [resolvedGapItems, setResolvedGapItems] = useState<Set<string>>(new Set());
   const [resolvingItem, setResolvingItem]       = useState<string | null>(null);
+  // Meeting item resolution — local only, not persisted
+  const [resolvedMeetingItems, setResolvedMeetingItems] = useState<Set<string>>(new Set());
 
   // Message expansion — track toggled-from-default state
   // Presence means "flipped": auto-expand + toggled = collapsed; not-auto + toggled = expanded
@@ -170,6 +184,12 @@ export default function EngagementThreadPage() {
   const [sending, setSending]         = useState(false);
   const [sendError, setSendError]     = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
+
+  // Bid / quote detection
+  const [detectedAsBid, setDetectedAsBid]     = useState(false);
+  const [detectedBidData, setDetectedBidData] = useState<{
+    amount: number | null; currency: string | null; timeline: string | null;
+  } | null>(null);
 
   // Meeting invite — now a modal
   const [showMeetingModal, setShowMeetingModal] = useState(false);
@@ -206,8 +226,37 @@ export default function EngagementThreadPage() {
   // Show-more for follow-up list
   const [showAllFollowup, setShowAllFollowup] = useState(false);
 
+  // On-demand follow-up generation (when debrief exists but no draft yet)
+  const [generatingFollowup, setGeneratingFollowup] = useState(false);
+  const [generateFollowupError, setGenerateFollowupError] = useState('');
+
+  async function handleGenerateFollowup() {
+    setGeneratingFollowup(true);
+    setGenerateFollowupError('');
+    try {
+      const res  = await fetch(`/api/biotech/engagements/${engagementId}/generate-followup`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setGenerateFollowupError((json.error as string) ?? 'Generation failed — please retry');
+        setGeneratingFollowup(false);
+        return;
+      }
+      const fd = json as { subject: string; body: string; message_id: string };
+      setDraftSubject(fd.subject);
+      setDraftBody(fd.body);
+      setDraftMsgId(fd.message_id);
+    } catch {
+      setGenerateFollowupError('Network error — please retry');
+    }
+    setGeneratingFollowup(false);
+  }
+
   // Items flagged to incorporate into the draft
   const [addedToDraft, setAddedToDraft]           = useState<Set<string>>(new Set());
+  // Items permanently incorporated after a successful regeneration — persists through send
+  const [draftedItems, setDraftedItems]           = useState<Set<string>>(new Set());
   const [regeneratingDraft, setRegeneratingDraft] = useState(false);
   const [regenerateError, setRegenerateError]     = useState('');
   // Tracks resolved count at the time of last successful regen — suppresses amber banner until new resolutions
@@ -236,7 +285,8 @@ export default function EngagementThreadPage() {
       const data = await res.json() as { draft_body: string; draft_subject: string };
       setDraftBody(data.draft_body);
       if (data.draft_subject) setDraftSubject(data.draft_subject);
-      // Banners cleared: draft is now up to date
+      // Move queued items into the permanent drafted set so they stay hidden after regen
+      setDraftedItems(prev => new Set([...prev, ...addedToDraft]));
       setAddedToDraft(new Set());
       setResolvedAtLastRegen(resolvedGapItems.size);
     } catch {
@@ -294,7 +344,7 @@ export default function EngagementThreadPage() {
     const [{ data: engData }, { data: msgData }, { data: meetingData }] = await Promise.all([
       supabase
         .from('cro_engagements')
-        .select('id, cro_name, cro_email, stage, brief_id, quoted_amount, quoted_currency, quoted_timeline, quote_valid_until, quote_notes, rfp_internal_briefs(title, rfp_context_notes)')
+        .select('id, cro_name, cro_email, stage, brief_id, capture_mode, quoted_amount, quoted_currency, quoted_timeline, quote_valid_until, quote_notes, rfp_internal_briefs(title, rfp_context_notes)')
         .eq('id', engagementId)
         .single(),
       supabase
@@ -318,8 +368,34 @@ export default function EngagementThreadPage() {
     }
     if (msgData) {
       setMessages(msgData as Message[]);
-      const existingFollowup = (msgData as Message[]).find(
-        m => m.direction === 'outbound' && m.message_type === 'followup' && m.status === 'draft'
+
+      // AI-generated reply draft (Task 9 output — status='draft', ai_generated=true, type='response')
+      const aiReplyMsg = (msgData as Message[]).find(
+        m => m.direction === 'outbound' && m.message_type === 'response' && m.status === 'draft' && m.ai_generated
+      );
+      if (aiReplyMsg) {
+        setAiReplyDraft(aiReplyMsg);
+        setAiReplyBody(aiReplyMsg.body ?? '');
+        setAiReplySubject(aiReplyMsg.subject ?? 'Re: (your message)');
+      } else {
+        setAiReplyDraft(null);
+      }
+
+      // Find the most recent pending followup draft (reverse so latest wins).
+      // Guard: only use a draft if it was created AFTER the most recently sent outbound
+      // message — this prevents stale pre-existing drafts from re-populating the editor
+      // after the user has already approved and sent a newer reply.
+      const latestSentOutboundAt = [...(msgData as Message[])]
+        .filter(m => m.direction === 'outbound' && (m.status === 'sent' || m.status === 'approved'))
+        .map(m => m.created_at)
+        .sort()
+        .at(-1) ?? null;
+
+      const existingFollowup = [...(msgData as Message[])].reverse().find(
+        m => m.direction === 'outbound'
+          && m.message_type === 'followup'
+          && m.status === 'draft'
+          && (!latestSentOutboundAt || m.created_at > latestSentOutboundAt)
       );
       if (existingFollowup) {
         setDraftSubject(existingFollowup.subject ?? '');
@@ -337,6 +413,15 @@ export default function EngagementThreadPage() {
         if (meta?.resolved_items) {
           setResolvedGapItems(new Set(meta.resolved_items));
         }
+        if (meta?.is_bid_document) {
+          setDetectedAsBid(true);
+          setDetectedBidData(meta.bid_extracted ?? null);
+        }
+      } else {
+        // No pending draft — clear draft editor state so the UI reflects the sent/empty state
+        setDraftMsgId(null);
+        setDraftSubject('');
+        setDraftBody('');
       }
       const existingMeeting = (msgData as Message[]).find(
         m => m.direction === 'outbound' && m.message_type === 'meeting_invite' && m.status === 'draft'
@@ -382,10 +467,15 @@ export default function EngagementThreadPage() {
       setShowPasteModal(false); setPastedResponse(''); setPasteLoading(false);
       await loadThread();
       if (json.followup) {
-        setFollowup(json.followup as FollowupOutput);
-        setDraftSubject((json.followup as FollowupOutput).draft_subject);
-        setDraftBody((json.followup as FollowupOutput).draft_reply);
+        const fu = json.followup as FollowupOutput;
+        setFollowup(fu);
+        setDraftSubject(fu.draft_subject);
+        setDraftBody(fu.draft_reply);
         setDraftMsgId(json.draft_message_id as string | null);
+        if (fu.is_bid_document) {
+          setDetectedAsBid(true);
+          setDetectedBidData(fu.bid_extracted ?? null);
+        }
       } else if (json.ai_error) {
         setFollowupError(json.ai_error as string);
       }
@@ -425,6 +515,45 @@ export default function EngagementThreadPage() {
     }
     setSendSuccess(true); setSending(false);
     setFollowup(null); setResolvedGapItems(new Set());
+    await loadThread();
+  }
+
+  // ── AI reply draft handlers (Task 10) ────────────────────────────────────
+
+  async function handleApproveAiReplyDraft() {
+    if (!aiReplyDraft || !aiReplyBody.trim()) return;
+    setAiApproving(true); setAiApproveError(''); setAiApproveSent(false);
+    try {
+      const res  = await fetch(`/api/biotech/engagements/${engagementId}/send`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ message_id: aiReplyDraft.id, subject: aiReplySubject, body: aiReplyBody }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.sent) {
+        setAiApproveError((json.error as string) ?? 'Send failed — please retry');
+        setAiApproving(false); return;
+      }
+      setAiApproveSent(true); setAiApproving(false);
+      await loadThread();
+    } catch {
+      setAiApproveError('Network error — please retry');
+      setAiApproving(false);
+    }
+  }
+
+  async function handleDismissAiReplyDraft() {
+    if (!aiReplyDraft) return;
+    setAiDismissing(true); setAiApproveError('');
+    const { error } = await supabase
+      .from('engagement_messages')
+      .update({ status: 'dismissed' })
+      .eq('id', aiReplyDraft.id);
+    if (error) {
+      setAiApproveError('Failed to dismiss — please retry');
+      setAiDismissing(false); return;
+    }
+    setAiDismissing(false);
     await loadThread();
   }
 
@@ -522,6 +651,13 @@ export default function EngagementThreadPage() {
       await loadThread();
       if (json.debrief) setDebrief(json.debrief as DebriefOutput);
       else if (json.ai_error) setNotesError(json.ai_error as string);
+      // Populate draft panel immediately from generated follow-up (if any)
+      if (json.followup_draft) {
+        const fd = json.followup_draft as { subject: string; body: string; message_id: string };
+        setDraftSubject(fd.subject);
+        setDraftBody(fd.body);
+        setDraftMsgId(fd.message_id);
+      }
     } catch {
       setNotesError('Network error — please try again'); setNotesLoading(false);
     }
@@ -579,15 +715,15 @@ export default function EngagementThreadPage() {
   }
 
   const isEnquiryDraft     = engagement.stage === 'enquiry_draft';
-  const canLogResponse     = ['enquiry_sent', 'followup_sent', 'meeting_scheduled',
+  const canLogResponse     = ['enquiry_sent', 'response_received', 'followup_sent', 'meeting_scheduled',
                               'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
-  const canScheduleMeeting = ['followup_sent', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  const canScheduleMeeting = ['response_received', 'followup_sent', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
   const hasMeetingDraft    = !!meetingMsgId && !meetingSent;
-  const canLogMeetingNotes = ['meeting_scheduled', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
+  const canLogMeetingNotes = ['followup_sent', 'meeting_scheduled', 'meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
   const canGoToRfp         = ['meeting_done', 'rfp_draft', 'rfp_sent'].includes(engagement.stage);
   const canLogQuote        = ['followup_sent', 'meeting_done', 'rfp_sent', 'quote_received'].includes(engagement.stage);
   const hasQuote           = engagement.stage === 'quote_received' && !!engagement.quoted_amount;
-  const canMarkOutcome     = ['rfp_sent', 'rfp_draft', 'meeting_done', 'quote_received'].includes(engagement.stage);
+  const canMarkOutcome     = ['followup_sent', 'rfp_sent', 'rfp_draft', 'meeting_done', 'quote_received'].includes(engagement.stage);
   const canRevertOutcome   = ['awarded', 'closed'].includes(engagement.stage);
   const hasFollowupDraft   = engagement.stage === 'followup_draft' || (engagement.stage === 'meeting_done' && !!draftMsgId);
   const stageLabel         = STAGE_LABELS[engagement.stage] ?? engagement.stage;
@@ -597,8 +733,8 @@ export default function EngagementThreadPage() {
   const needsFollowupItems: (TaggedItem & { canResolve?: boolean })[] = [
     ...(followup?.gap_analysis.unaddressed ?? []).map(text => ({ text, source: 'email' as const, canResolve: true })),
     ...(followup?.gap_analysis.concerns    ?? []).map(text => ({ text, source: 'email' as const, canResolve: true })),
-    ...(debrief?.new_concerns    ?? []).map(text => ({ text, source: 'meeting' as const })),
-    ...(debrief?.open_questions  ?? []).map(text => ({ text, source: 'meeting' as const })),
+    ...(debrief?.new_concerns    ?? []).map(text => ({ text, source: 'meeting' as const, canResolve: true })),
+    ...(debrief?.open_questions  ?? []).map(text => ({ text, source: 'meeting' as const, canResolve: true })),
   ];
 
   const confirmedItems: TaggedItem[] = [
@@ -611,7 +747,9 @@ export default function EngagementThreadPage() {
   ];
 
   const openNeedsFollowup = needsFollowupItems.filter(item =>
-    item.source === 'email' ? !resolvedGapItems.has(item.text) : !addedToDraft.has(item.text)
+    item.source === 'email'
+      ? !resolvedGapItems.has(item.text)
+      : !resolvedMeetingItems.has(item.text) && !draftedItems.has(item.text)
   );
 
   // Show amber banner when user has resolved email items (draft may be stale)
@@ -619,8 +757,8 @@ export default function EngagementThreadPage() {
 
   const hasActionCard = followup || followupLoading || hasFollowupDraft || debrief || debriefLoading;
 
-  // Thread: exclude drafts (they live in the action card above), latest at top
-  const threadMessages = messages.filter(m => m.status !== 'draft');
+  // Thread: exclude drafts and dismissed messages (they live in the action card), latest at top
+  const threadMessages = messages.filter(m => m.status !== 'draft' && m.status !== 'dismissed' && m.status !== 'superseded');
   const reversedMessages = [...threadMessages].reverse();
   const latestMsgId      = threadMessages[threadMessages.length - 1]?.id;
 
@@ -695,15 +833,16 @@ export default function EngagementThreadPage() {
                 </button>
               )}
               {hasQuote && (
-                <div className="flex items-center gap-2 rounded-lg border border-teal-600/40 bg-teal-900/20 px-4 py-2">
-                  <span className="text-sm font-semibold text-teal-300">
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 shadow-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-teal-600">Quote</span>
+                  <span className="text-sm font-bold text-gray-900">
                     {engagement.quoted_currency ?? 'USD'} {Number(engagement.quoted_amount).toLocaleString()}
                   </span>
                   {engagement.quoted_timeline && (
-                    <span className="text-xs text-teal-500">· {engagement.quoted_timeline}</span>
+                    <span className="text-xs text-gray-400">· {engagement.quoted_timeline}</span>
                   )}
                   <button onClick={() => setShowQuoteModal(true)}
-                    className="text-xs text-teal-500 hover:text-teal-300 transition-colors ml-1">
+                    className="ml-1 text-xs font-medium text-teal-600 hover:text-teal-800 transition-colors">
                     Edit
                   </button>
                 </div>
@@ -755,6 +894,83 @@ export default function EngagementThreadPage() {
           </div>
         </header>
 
+        {/* Native mode indicator */}
+        {engagement.capture_mode === 'native' && (
+          <div className="rounded-xl border border-gray-700/40 bg-gray-800/30 px-5 py-3 flex items-center gap-3">
+            <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <p className="text-sm text-gray-400">
+              <span className="font-medium text-gray-300">Native mode</span> — CRO replies land in your inbox directly. The app does not capture replies for this engagement.
+            </p>
+          </div>
+        )}
+
+        {/* ── AI Reply Draft Approval Card (Task 10) ── */}
+        {aiReplyDraft && !aiApproveSent && engagement.capture_mode === 'assisted' && (
+          <section className="rounded-2xl border border-blue-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-6 pt-5 pb-4 border-b border-blue-100 flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-bold">AI</span>
+              <h2 className="text-sm font-semibold text-blue-900">Reply draft ready for review</h2>
+              <span className="ml-auto text-xs text-blue-500 font-medium">AI-generated · {engagement.cro_name}</span>
+            </div>
+
+            <div className="px-6 py-4 space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-600">Subject</label>
+                <input
+                  type="text"
+                  value={aiReplySubject}
+                  onChange={e => setAiReplySubject(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-600">
+                  Draft reply <span className="text-gray-400 font-normal">(edit before sending)</span>
+                </label>
+                <textarea
+                  value={aiReplyBody}
+                  onChange={e => setAiReplyBody(e.target.value)}
+                  rows={10}
+                  className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {aiApproveError && (
+              <div className="px-6 pb-2">
+                <p className="text-xs text-red-600">⚠ {aiApproveError}</p>
+              </div>
+            )}
+
+            <div className="px-6 pb-5 flex items-center gap-3 justify-between">
+              <button
+                onClick={handleDismissAiReplyDraft}
+                disabled={aiDismissing || aiApproving}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+              >
+                {aiDismissing ? 'Dismissing…' : 'Dismiss'}
+              </button>
+              <button
+                onClick={handleApproveAiReplyDraft}
+                disabled={!aiReplyBody.trim() || aiApproving || aiDismissing}
+                className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                {aiApproving ? 'Sending…' : 'Approve & send →'}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {aiApproveSent && (
+          <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-3 flex items-center gap-3">
+            <span className="text-green-600">✓</span>
+            <p className="text-sm text-green-800 font-medium">Reply sent to {engagement.cro_name}</p>
+          </div>
+        )}
+
         {/* Enquiry not sent banner */}
         {isEnquiryDraft && (
           <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
@@ -787,6 +1003,38 @@ export default function EngagementThreadPage() {
               <div className="px-6 py-4 text-xs text-red-600 border-b border-gray-100">⚠ {followupError}</div>
             )}
 
+            {/* Bid / quote detection banner — AI-detected only, opens the shared quote modal */}
+            {(followup || debrief) && !followupLoading && !debriefLoading &&
+              detectedAsBid && (
+              <div className="px-6 py-3 border-b border-teal-200 bg-teal-50 flex items-center gap-3">
+                <span className="text-base">💰</span>
+                <p className="flex-1 text-sm text-teal-800">
+                  This response appears to contain a <strong>bid or quote</strong>.
+                </p>
+                <span className="text-[10px] font-semibold uppercase tracking-widest bg-teal-100 text-teal-700 border border-teal-200 rounded-full px-2 py-0.5 shrink-0">
+                  AI detected
+                </span>
+                <button
+                  onClick={() => {
+                    // Reset first so stale data from a previous quote doesn't bleed through
+                    setQuoteAmount(''); setQuoteCurrency('USD');
+                    setQuoteTimeline(''); setQuoteValidUntil(''); setQuoteNotes('');
+                    // Pre-fill from AI extraction
+                    if (detectedBidData?.amount)   setQuoteAmount(String(detectedBidData.amount));
+                    if (detectedBidData?.currency) setQuoteCurrency(detectedBidData.currency);
+                    if (detectedBidData?.timeline) setQuoteTimeline(detectedBidData.timeline);
+                    // Full inbound email body goes in notes for AI comparison later
+                    const latestInbound = [...messages].reverse().find(m => m.direction === 'inbound' && m.message_type === 'response');
+                    if (latestInbound?.body) setQuoteNotes(latestInbound.body);
+                    setShowQuoteModal(true);
+                  }}
+                  className="shrink-0 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-500 transition-colors"
+                >
+                  Log quote →
+                </button>
+              </div>
+            )}
+
             {/* Main content */}
             {(followup || debrief) && !followupLoading && !debriefLoading && (
               <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
@@ -807,14 +1055,17 @@ export default function EngagementThreadPage() {
                       </div>
                       <ul className="space-y-2">
                         {(showAllFollowup ? openNeedsFollowup : openNeedsFollowup.slice(0, 5)).map((item, i) => {
-                          const resolved  = item.source === 'email' && resolvedGapItems.has(item.text);
+                          const resolved  = item.source === 'email'
+                            ? resolvedGapItems.has(item.text)
+                            : resolvedMeetingItems.has(item.text);
                           const inDraft   = addedToDraft.has(item.text);
+                          const dimmed    = resolved || inDraft;
                           return (
-                            <li key={i} className={`flex items-start gap-2 transition-opacity ${resolved || inDraft ? 'opacity-40' : ''}`}>
+                            <li key={i} className={`flex items-start gap-2 transition-opacity ${dimmed ? 'opacity-40' : ''}`}>
                               <span className={`mt-0.5 shrink-0 text-xs ${item.source === 'email' ? 'text-amber-600 dark:text-amber-400' : 'text-red-500 dark:text-red-400'}`}>
                                 {item.source === 'email' ? '?' : '⚠'}
                               </span>
-                              <span className={`flex-1 text-xs leading-relaxed ${resolved || inDraft ? 'line-through text-amber-400 dark:text-amber-600' : 'text-amber-900 dark:text-amber-100'}`}>
+                              <span className={`flex-1 text-xs leading-relaxed ${dimmed ? 'line-through text-amber-400 dark:text-amber-600' : 'text-amber-900 dark:text-amber-100'}`}>
                                 {item.text}
                                 <SourceTag source={item.source} />
                               </span>
@@ -830,11 +1081,21 @@ export default function EngagementThreadPage() {
                               >
                                 {inDraft ? '✓ In draft' : '→ Draft'}
                               </button>
-                              {/* Resolve — email items only */}
+                              {/* Resolve — all items with canResolve */}
                               {item.canResolve && (
                                 <button
-                                  onClick={() => toggleResolvedGap(item.text)}
-                                  disabled={resolvingItem === item.text}
+                                  onClick={() => {
+                                    if (item.source === 'email') {
+                                      void toggleResolvedGap(item.text);
+                                    } else {
+                                      setResolvedMeetingItems(prev => {
+                                        const next = new Set(prev);
+                                        resolved ? next.delete(item.text) : next.add(item.text);
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  disabled={item.source === 'email' && resolvingItem === item.text}
                                   className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
                                     resolved
                                       ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
@@ -930,28 +1191,73 @@ export default function EngagementThreadPage() {
                       {followup || hasFollowupDraft ? 'Draft reply' : 'Next step'}
                     </span>
 
-                    {/* Waiting state — persistent, shown whenever there's no draft to edit */}
+                    {/* Waiting / generate state — shown when there's no draft to edit */}
                     {!followup && !hasFollowupDraft && (
                       <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
-                        <div className={`rounded-full p-4 ${sendSuccess ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
-                          {sendSuccess ? (
-                            <svg className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <svg className="h-8 w-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                            {sendSuccess ? 'Follow-up sent' : 'Waiting for reply'}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
-                            Waiting for {engagement?.cro_name ?? 'CRO'} to reply. When they do, click <strong>+ Log CRO response</strong> above to continue the analysis.
-                          </p>
-                        </div>
+                        {/* If debrief has open items and no draft yet, offer to generate */}
+                        {debrief && (debrief.open_questions.length > 0 || debrief.new_concerns.length > 0) && !sendSuccess && engagement.stage !== 'followup_sent' ? (
+                          <>
+                            <div className="rounded-full p-4 bg-blue-50 dark:bg-blue-900/30">
+                              <svg className="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <div className="space-y-3">
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                                  Ready to draft follow-up
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
+                                  {debrief.open_questions.length + debrief.new_concerns.length} open item{debrief.open_questions.length + debrief.new_concerns.length !== 1 ? 's' : ''} from the meeting need addressing.
+                                </p>
+                              </div>
+                              {generateFollowupError && (
+                                <p className="text-xs text-red-600">⚠ {generateFollowupError}</p>
+                              )}
+                              <button
+                                onClick={handleGenerateFollowup}
+                                disabled={generatingFollowup}
+                                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                              >
+                                {generatingFollowup ? (
+                                  <>
+                                    <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    Drafting…
+                                  </>
+                                ) : (
+                                  '✦ Generate follow-up email →'
+                                )}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className={`rounded-full p-4 ${sendSuccess || engagement.stage === 'followup_sent' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-800'}`}>
+                              {sendSuccess || engagement.stage === 'followup_sent' ? (
+                                <svg className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              ) : (
+                                <svg className="h-8 w-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                                {sendSuccess || engagement.stage === 'followup_sent' ? 'Follow-up sent' : 'Waiting for reply'}
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
+                                {sendSuccess || engagement.stage === 'followup_sent'
+                                  ? `Follow-up sent to ${engagement?.cro_name ?? 'CRO'}. Log their reply when it arrives.`
+                                  : `Waiting for ${engagement?.cro_name ?? 'CRO'} to reply. When they do, click + Log CRO response above to continue the analysis.`}
+                              </p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 

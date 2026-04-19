@@ -1,0 +1,49 @@
+$cookie = "sb-zerqgebtzjombkwjxysg-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJleUpoYkdjaU9pSkZVekkxTmlJc0ltdHBaQ0k2SWpVMllqZzVNVFJpTFdZNFptSXROR00yWlMxaFpqRmpMVFl3Wm1Fd05HWmxPREU0TXlJc0luUjVjQ0k2SWtwWFZDSjkuZXlKcGMzTWlPaUpvZEhSd2N6b3ZMM3BsY25GblpXSjBlbXB2YldKcmQycDRlWE5uTG5OMWNHRmlZWE5sTG1OdkwyRjFkR2d2ZGpFaUxDSnpkV0lpT2lJd1pHVXlOREF5TWkxaU9UQTNMVFJrTnpZdE9UZzJOeTFoTlRnNFlXTTJNelJtTkRZaUxDSmhkV1FpT2lKaGRYUm9aVzUwYVdOaGRHVmtJaXdpWlhod0lqb3hOemMyTmpBeE9EazJMQ0pwWVhRaU9qRTNOelkxT1RneU9UWXNJbVZ0WVdsc0lqb2ljMkpvWVhaellYSkFaMjFoYVd3dVkyOXRJaXdpY0dodmJtVWlPaUlpTENKaGNIQmZiV1YwWVdSaGRHRWlPbnNpY0hKdmRtbGtaWElpT2lKbGJXRnBiQ0lzSW5CeWIzWnBaR1Z5Y3lJNld5SmxiV0ZwYkNKZGZTd2lkWE5sY2w5dFpYUmhaR0YwWVNJNmV5SmxiV0ZwYkNJNkluTmlhR0YyYzJGeVFHZHRZV2xzTG1OdmJTSXNJbVZ0WVdsc1gzWmxjbWxtYVdWa0lqcDBjblZsTENKd2FHOXVaVjkyWlhKcFptbGxaQ0k2Wm1Gc2MyVXNJbk4xWWlJNklqQmtaVEkwTURJeUxXSTVNRGN0TkdRM05pMDVPRFkzTFdFMU9EaGhZell6TkdZME5pSXNJblZ6WlhKZmRIbHdaU0k2SW1KcGIzUmxZMmdpZlN3aWNtOXNaU0k2SW1GMWRHaGxiblJwWTJGMFpXUWlMQ0poWVd3aU9pSmhZV3d4SWl3aVlXMXlJanBiZXlKdFpYUm9iMlFpT2lKd1lYTnpkMjl5WkNJc0luUnBiV1Z6ZEdGdGNDSTZNVGMzTmpVNU5EYzVObjFkTENKelpYTnphVzl1WDJsa0lqb2lZMkV6T0dJNU1ESXRaRFJsTVMwME9XRmhMV0V6TjJRdE5qUTNOVFF3WlRSbE5EVmxJaXdpYVhOZllXNXZibmx0YjNWeklqcG1ZV3h6WlgwLk1ZNDBEaTRWWTRaY0NnOGotWFd3RUpqSVRfTjZsbnh3UWR0QnZLZkN0Q18xUlVoU1JkeENDaFdxVGd1ZXNjR2stMFFlNFpqS3dvWVdnVlpaMm9BX1N3IiwidG9rZW5fdHlwZSI6ImJlYXJlciIsImV4cGlyZXNfaW4iOjM2MDAsImV4cGlyZXNfYXQiOjE3NzY2MDE4OTYsInJlZnJlc2hfdG9rZW4iOiJycmNub2c1NXRzeHIiLCJ1c2VyIjp7ImlkIjoiMGRlMjQwMjItYjkwNy00ZDc2LTk4NjctYTU4OGFjNjM0ZjQ2IiwiYXVkIjoiYXV0aGVudGljYXRlZCIsInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiZW1haWwiOiJzYmhhdnNhckBnbWFpbC5jb20iLCJlbWFpbF9jb25maXJtZWRfYXQiOiIyMDI2LTA0LTExVDAyOjE0OjM4Ljg0Mzg0WiIsInBob25lIjoiIiwiY29uZmlybWF0aW9uX3NlbnRfYXQiOiIyMDI2LTA0LTExVDAyOjE0OjI2LjcxNjgzWiIsImNvbmZpcm1lZF9hdCI6IjIwMjYtMDQtMTFUMDI6MTQ6MzguODQzODRaIiwibGFzdF9zaWduX2luX2F0IjoiMjAyNi0wNC0xOVQxMDozMzoxNi4yMzQ1MTJaIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJzYmhhdnNhckBnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiIwZGUyNDAyMi1iOTA3LTRkNzYtOTg2Ny1hNTg4YWM2MzRmNDYiLCJ1c2VyX3R5cGUiOiJiaW90ZWNoIn0sImlkZW50aXRpZXMiOlt7ImlkZW50aXR5X2lkIjoiYTAwMTk2MTItZWJhNi00Y2Y2LTg3ZTItNTQzYWNhNTk3MjhiIiwiaWQiOiIwZGUyNDAyMi1iOTA3LTRkNzYtOTg2Ny1hNTg4YWM2MzRmNDYiLCJ1c2VyX2lkIjoiMGRlMjQwMjItYjkwNy00ZDc2LTk4NjctYTU4OGFjNjM0ZjQ2IiwiaWRlbnRpdHlfZGF0YSI6eyJlbWFpbCI6InNiaGF2c2FyQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6IjBkZTI0MDIyLWI5MDctNGQ3Ni05ODY3LWE1ODhhYzYzNGY0NiIsInVzZXJfdHlwZSI6ImJpb3RlY2gifSwicHJvdmlkZXIiOiJlbWFpbCIsImxhc3Rfc2lnbl9pbl9hdCI6IjIwMjYtMDQtMTFUMDI6MTQ6MjYuNzA5MDUxWiIsImNyZWF0ZWRfYXQiOiIyMDI2LTA0LTExVDAyOjE0OjI2LjcwOTEwMVoiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNC0xMVQwMjoxNDoyNi43MDkxMDFaIiwiZW1haWwiOiJzYmhhdnNhckBnbWFpbC5jb20ifV0sImNyZWF0ZWRfYXQiOiIyMDI2LTA0LTExVDAyOjE0OjI2LjY5OTM1NFoiLCJ1cGRhdGVkX2F0IjoiMjAyNi0wNC0xOVQxMTozMTozNi42MTQ4ODFaIiwiaXNfYW5vbnltb3VzIjpmYWxzZX19"
+
+$body = @{
+  response_text = @"
+Subject: Re: Q3 Toxicology Study - Formal Quote & Proposal
+
+Thank you for the opportunity to submit our formal proposal. Following our recent discussions, please find our detailed bid below.
+
+SCOPE & PRICING
+- 28-day repeat dose toxicology study (rat, 3 groups + control, n=10/sex/group)
+- Full histopathology panel with peer review
+- Clinical pathology at Days 14 and 28
+- TK satellite group (n=3/sex/group) at Days 1 and 28
+- GLP-compliant under current USFDA inspection certificate
+
+BUDGET
+Study conduct & animals:          $82,500
+Histopathology & pathology:       $24,000
+TK/bioanalytical analysis:        $18,500
+Report writing & QA:               $9,200
+Total Fixed Price:               $134,200 USD
+
+TIMELINE
+- Study start: 3 weeks post signed contract
+- In-life: 10 weeks
+- Draft report: 6 weeks post last animal
+- Final report: 2 weeks post sponsor comment
+- Total: ~22 weeks from contract execution
+
+VALIDITY: Quote valid 45 days (expires June 3, 2026)
+
+ASSUMPTIONS
+- Sponsor provides test article with CoA
+- No formulation development included
+- GLP archive fees billed separately
+
+Our facility is AAALAC accredited and GLP-certified with Q3 capacity confirmed.
+
+Best regards,
+Dr. Sarah Chen, Director BD
+LabCorp Early Development
+"@
+} | ConvertTo-Json
+
+Invoke-WebRequest -Uri "http://localhost:3000/api/biotech/engagements/9c8aac02-3759-4282-967a-0ed7982cd57a/inbound" `
+  -Method POST `
+  -ContentType "application/json" `
+  -Headers @{ Cookie = $cookie } `
+  -Body $body

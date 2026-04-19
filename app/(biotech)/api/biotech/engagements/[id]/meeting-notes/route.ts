@@ -1,11 +1,13 @@
 // POST /api/biotech/engagements/[id]/meeting-notes
 // Saves meeting notes, runs AI debrief analysis (4 outputs), advances stage to meeting_done.
-// Returns { meeting_id, debrief } where debrief has gaps_resolved, new_concerns,
-// rfp_refinements, open_questions.
+// Also inserts meeting notes into engagement_messages so they appear in the thread.
+// Also generates a follow-up email draft when open items exist.
+// Returns { meeting_id, debrief, followup_draft } where followup_draft may be null.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import Anthropic from '@anthropic-ai/sdk';
+import { biotechClaude } from '@biotech/lib/claude';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -62,25 +64,46 @@ export async function POST(
   // Verify engagement ownership
   const { data: engagement } = await supabase
     .from('cro_engagements')
-    .select('id, cro_name, stage, brief_id, rfp_internal_briefs(title, classification, extracted_data)')
+    .select('id, cro_name, cro_email, stage, brief_id, rfp_internal_briefs(title, classification, extracted_data)')
     .eq('id', engagementId)
     .eq('user_id', user.id)
     .single();
 
   if (!engagement) return NextResponse.json({ error: 'Engagement not found' }, { status: 404 });
 
-  // Load prior message thread for context (last 5 messages)
+  // Load prior message thread for context (last 8 messages, excluding meeting notes)
   const { data: messages } = await supabase
     .from('engagement_messages')
-    .select('direction, message_type, body, created_at')
+    .select('direction, message_type, subject, body, ai_metadata, created_at')
     .eq('engagement_id', engagementId)
+    .neq('message_type', 'meeting_notes')
     .order('created_at', { ascending: false })
-    .limit(5);
+    .limit(8);
 
-  const threadSummary = (messages ?? [])
-    .reverse()
+  const priorMsgs = (messages ?? []).reverse();
+
+  const threadSummary = priorMsgs
     .map(m => `[${m.direction === 'outbound' ? 'You' : engagement.cro_name}]: ${(m.body ?? '').slice(0, 300)}`)
     .join('\n\n');
+
+  // Extract unresolved email gap items from the most recent followup draft (if any)
+  const emailDraft = priorMsgs.find(
+    m => m.direction === 'outbound' && m.message_type === 'followup'
+  );
+  const emailMeta = emailDraft?.ai_metadata as {
+    gap_analysis?: { unaddressed?: string[]; concerns?: string[] };
+    resolved_items?: string[];
+  } | null;
+  const unresolvedEmailGaps: string[] = [];
+  if (emailMeta?.gap_analysis) {
+    const resolved = new Set(emailMeta.resolved_items ?? []);
+    for (const t of emailMeta.gap_analysis.unaddressed ?? []) {
+      if (!resolved.has(t)) unresolvedEmailGaps.push(t);
+    }
+    for (const t of emailMeta.gap_analysis.concerns ?? []) {
+      if (!resolved.has(t)) unresolvedEmailGaps.push(t);
+    }
+  }
 
   // Build IP-safe brief context
   const briefRaw = Array.isArray(engagement.rfp_internal_briefs)
@@ -129,7 +152,7 @@ Rules:
 4. Each array item should be one complete sentence
 5. Return valid JSON only — no markdown, no explanation outside the JSON`;
 
-  // Save notes to DB first (before AI — so data is safe even if Claude fails)
+  // Save notes to engagement_meetings first (before AI — so data is safe even if Claude fails)
   const { data: savedMeeting, error: saveErr } = await supabase
     .from('engagement_meetings')
     .insert({
@@ -147,13 +170,29 @@ Rules:
     return NextResponse.json({ error: 'Failed to save meeting notes' }, { status: 500 });
   }
 
+  // Insert into engagement_messages so meeting notes appear in the thread
+  const notesSubject = meeting_date
+    ? `Meeting notes — ${new Date(meeting_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : 'Meeting notes';
+  await supabase
+    .from('engagement_messages')
+    .insert({
+      engagement_id: engagementId,
+      direction:     'inbound',
+      message_type:  'meeting_notes',
+      subject:       notesSubject,
+      body:          attendees ? `Attendees: ${attendees}\n\n${notes.trim()}` : notes.trim(),
+      status:        'received',
+      ai_generated:  false,
+    });
+
   // Update stage to meeting_done
   await supabase
     .from('cro_engagements')
     .update({ stage: 'meeting_done', updated_at: new Date().toISOString() })
     .eq('id', engagementId);
 
-  // ── Call Claude ───────────────────────────────────────────────────────────
+  // ── Call Claude for debrief ───────────────────────────────────────────────
   let debrief: DebriefOutput;
   try {
     const response = await anthropic.messages.create({
@@ -164,7 +203,6 @@ Rules:
     });
 
     const raw = (response.content[0] as { type: string; text: string }).text.trim();
-    // Strip markdown fences if present
     const json = raw.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
     debrief = JSON.parse(json) as DebriefOutput;
 
@@ -183,13 +221,108 @@ Rules:
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[meeting-notes] Claude error:', msg);
-    // Don't fail the request — notes are saved, AI just failed
     return NextResponse.json({
       meeting_id: savedMeeting.id,
       debrief:    null,
+      followup_draft: null,
       ai_error:   `AI analysis failed: ${msg}`,
     });
   }
 
-  return NextResponse.json({ meeting_id: savedMeeting.id, debrief });
+  // ── Generate follow-up email draft if there are open items ───────────────
+  const openItems = [...debrief.open_questions, ...debrief.new_concerns];
+  const allOpenItems = [
+    ...openItems,
+    ...unresolvedEmailGaps,
+  ];
+
+  let followupDraft: { subject: string; body: string; message_id: string } | null = null;
+
+  if (allOpenItems.length > 0) {
+    try {
+      // Load sender company name
+      let senderCompany: string | null = null;
+      try {
+        const { data: settings } = await supabase
+          .from('biotech_user_settings')
+          .select('company_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (settings?.company_name) senderCompany = settings.company_name;
+      } catch { /* ignore */ }
+
+      const fromLine = senderCompany ? ` at ${senderCompany}` : '';
+
+      const openFromMeeting = [...debrief.open_questions, ...debrief.new_concerns];
+      const meetingSection = openFromMeeting.length > 0
+        ? `\nFrom our meeting:\n${openFromMeeting.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
+        : '';
+      const emailSection = unresolvedEmailGaps.length > 0
+        ? `\nStill outstanding from prior emails:\n${unresolvedEmailGaps.map((t, i) => `${i + 1}. ${t}`).join('\n')}`
+        : '';
+
+      const draftPrompt = `You are helping a biotech scientist${fromLine} draft a follow-up email to ${engagement.cro_name} after a recent meeting.
+
+Study context (IP-safe):
+${briefContext}
+
+Open items that need to be addressed:
+${meetingSection}
+${emailSection}
+
+Write a professional, concise follow-up email (150–220 words) that:
+1. Opens with a brief thank-you for the meeting
+2. Addresses each open item as a clear, direct question
+3. Sets expectations for next steps
+4. Does NOT include compound names, MOA, or disease indications
+5. Does NOT use bullet points or numbered lists inside the email body
+
+Return a JSON object:
+{
+  "subject": "...",
+  "body": "..."
+}
+
+Return valid JSON only — no markdown, no explanation outside the JSON.`;
+
+      const raw = await biotechClaude({ userPrompt: draftPrompt, maxTokens: 800 });
+      const cleaned = raw.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+      const parsed = JSON.parse(cleaned) as { subject: string; body: string };
+
+      const { data: draftMsg } = await supabase
+        .from('engagement_messages')
+        .insert({
+          engagement_id: engagementId,
+          direction:     'outbound',
+          message_type:  'followup',
+          subject:       parsed.subject,
+          body:          parsed.body,
+          status:        'draft',
+          ai_generated:  true,
+          ai_metadata: {
+            gap_analysis: {
+              confirmed:   debrief.gaps_resolved,
+              unaddressed: debrief.open_questions,
+              concerns:    debrief.new_concerns,
+            },
+            resolved_items: [],
+          },
+        })
+        .select('id')
+        .single();
+
+      if (draftMsg) {
+        followupDraft = {
+          subject:    parsed.subject,
+          body:       parsed.body,
+          message_id: draftMsg.id,
+        };
+      }
+    } catch (err) {
+      console.error('[meeting-notes] Draft generation failed:', err);
+      // Non-fatal — debrief was still saved
+    }
+  }
+
+  return NextResponse.json({ meeting_id: savedMeeting.id, debrief, followup_draft: followupDraft });
 }

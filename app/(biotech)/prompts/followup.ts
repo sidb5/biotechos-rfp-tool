@@ -15,9 +15,15 @@ export interface FollowupOutput {
     unaddressed: string[];  // Brief requirements the CRO did not address
     concerns:   string[];   // Red flags or issues raised by CRO response
   };
-  draft_reply:   string;    // 200-250 word plain-text email body
-  draft_subject: string;    // reply subject line
+  draft_reply:        string;    // 200-250 word plain-text email body
+  draft_subject:      string;    // reply subject line
   suggested_questions: string[]; // advisory questions (3-6 items)
+  is_bid_document:    boolean;   // true if the response appears to contain pricing / a formal bid
+  bid_extracted?: {
+    amount:   number | null;   // total bid amount as a plain number, no currency symbol
+    currency: string | null;   // ISO code: USD, EUR, GBP, CHF, etc.
+    timeline: string | null;   // e.g. "22 weeks", "6 months"
+  } | null;
 }
 
 export function buildFollowupPrompt({
@@ -71,9 +77,11 @@ Produce exactly this JSON (no prose, no markdown fences):
     "unaddressed":  ["string", ...],
     "concerns":     ["string", ...]
   },
-  "draft_subject": "string",
-  "draft_reply":   "string",
-  "suggested_questions": ["string", ...]
+  "draft_subject":     "string",
+  "draft_reply":       "string",
+  "suggested_questions": ["string", ...],
+  "is_bid_document":   true | false,
+  "bid_extracted":     { "amount": number | null, "currency": string | null, "timeline": string | null }
 }
 
 Rules for each output:
@@ -97,5 +105,14 @@ suggested_questions (3-6 items):
 - Advisory questions the scientist should consider inserting
 - Each must be specific to this CRO's response — not generic
 - Phrased as questions the scientist might want to ask
-- e.g. "Their 10-week estimate seems tight for 4 cohorts — ask about bench availability"`;
+- e.g. "Their 10-week estimate seems tight for 4 cohorts — ask about bench availability"
+
+is_bid_document:
+- true if the CRO response contains any of: specific pricing figures, cost estimates, a formal budget breakdown, bid/proposal language responding to an RFP, or quote validity dates
+- false if it is a capability reply, question, scheduling message, or general correspondence without pricing
+
+bid_extracted (only meaningful when is_bid_document is true, otherwise all nulls):
+- amount: extract the single total/bottom-line bid figure as a plain number (e.g. 134200), not a range. null if not found
+- currency: 3-letter ISO code inferred from the response (e.g. "USD", "EUR"). null if not found
+- timeline: the overall study/delivery timeline as a short string (e.g. "22 weeks"). null if not found`;
 }

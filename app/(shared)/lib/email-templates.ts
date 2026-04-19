@@ -389,17 +389,21 @@ export function quoteSentTemplate(props: {
   shareUrl: string;
   accessCode: string;
   scopeSummary?: string;
+  documentType?: 'quote' | 'rfp_bid';
 }): { subject: string; html: string } {
+  const isRfpBid = props.documentType === 'rfp_bid';
+  const docLabel = isRfpBid ? 'RFP bid' : 'quote';
+  const docLabelCap = isRfpBid ? 'RFP Bid' : 'Quote';
   // Append access code to URL hash so it auto-fills on click
   const autoLoginUrl = `${props.shareUrl}#${props.accessCode}`;
   return {
-    subject: `Quote from ${props.croCompanyName} — ready for your review`,
+    subject: `${docLabelCap} from ${props.croCompanyName} — ready for your review`,
     html: base(`
-      ${h1('Your quote is ready')}
-      ${p(`<strong>${props.croCompanyName}</strong> has prepared a quote for <strong>${props.biotechName}</strong> and it's ready for your review.`)}
+      ${h1(`Your ${docLabel} is ready`)}
+      ${p(`<strong>${props.croCompanyName}</strong> has prepared a ${docLabel} for <strong>${props.biotechName}</strong> and it's ready for your review.`)}
       ${props.scopeSummary ? `<p style="margin:12px 0;font-size:13px;color:#6b7280;border-left:3px solid #e5e7eb;padding-left:12px;">${props.scopeSummary.slice(0, 200)}${props.scopeSummary.length > 200 ? '…' : ''}</p>` : ''}
-      <div style="margin-top:16px;">${btn(autoLoginUrl, 'View quote →')}</div>
-      ${p('Click the button above to view the full scope, timeline, and pricing.')}
+      <div style="margin-top:16px;">${btn(autoLoginUrl, `View ${docLabel} →`)}</div>
+      ${p(`Click the button above to view the full ${isRfpBid ? 'proposal' : 'scope, timeline, and pricing'}.`)}
       <p style="margin:12px 0;font-size:13px;color:#6b7280;">If the button doesn't work, open the link manually and enter access code: <strong style="font-family:monospace;letter-spacing:0.1em;">${props.accessCode}</strong></p>
       <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;">If you have questions, reply to this email — it will go directly to ${props.croCompanyName}.</p>
     `),

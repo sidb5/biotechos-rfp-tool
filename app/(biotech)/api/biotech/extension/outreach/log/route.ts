@@ -34,6 +34,17 @@ export async function POST(req: NextRequest) {
 
   if (!brief) return NextResponse.json({ error: 'Brief not found' }, { status: 404 });
 
+  // Snapshot the user's capture_mode once for all engagements in this batch
+  let captureMode: 'assisted' | 'native' = 'assisted';
+  try {
+    const { data: userSettings } = await supabase
+      .from('biotech_user_settings')
+      .select('capture_mode')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (userSettings?.capture_mode === 'native') captureMode = 'native';
+  } catch { /* fallback to assisted */ }
+
   const now = new Date().toISOString();
   const engagementIds: string[] = [];
 
@@ -61,12 +72,13 @@ export async function POST(req: NextRequest) {
         .from('cro_engagements')
         .insert({
           brief_id,
-          user_id: user.id,
-          cro_name: cro.name.trim(),
-          cro_email: cro.email.trim().toLowerCase(),
-          stage: 'enquiry_sent',
-          created_at: now,
-          updated_at: now,
+          user_id:      user.id,
+          cro_name:     cro.name.trim(),
+          cro_email:    cro.email.trim().toLowerCase(),
+          stage:        'enquiry_sent',
+          capture_mode: captureMode,
+          created_at:   now,
+          updated_at:   now,
         })
         .select('id')
         .single();

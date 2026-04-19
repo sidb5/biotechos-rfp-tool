@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   // Fetch proposal and verify ownership
   const { data: proposal } = await supabase
     .from('proposals')
-    .select('id, cro_id, rfp_id, created_at')
+    .select('id, cro_id, rfp_id, created_at, quote_data')
     .eq('id', proposalId)
     .single();
 
@@ -85,6 +85,8 @@ export async function POST(request: Request) {
   const studyType = parsedSummary?.study_type ?? 'Preclinical Study';
   const proposalDate = formatDate(new Date());
   const logoUrl = (profile as Record<string, string | null>).logo_url ?? null;
+  const quoteData = proposal.quote_data as { investment?: { item: string; qty: string; unit_price: string; total: string }[] } | null;
+  const investmentRows = quoteData?.investment ?? [];
 
   const orderedSections = SECTION_ORDER
     .map(name => (sections ?? []).find(s => s.section_name === name))
@@ -95,18 +97,13 @@ export async function POST(request: Request) {
   const plan = await getPlan(proposal.cro_id);
   const showWatermark = canAccess('watermark', plan) as boolean;
 
-  // Share token for Mechanic D recipient landing page URL
-  const { data: proposalFull } = await supabase
-    .from('proposals')
-    .select('share_token')
-    .eq('id', proposalId)
-    .single();
-  const shareToken = proposalFull?.share_token ?? null;
+  // Share token for Mechanic D recipient landing page URL (already fetched in proposal)
+  const shareToken = (proposal as Record<string, unknown>).share_token as string | null ?? null;
 
   const html = buildProposalHTML({
     croName, biotechName, studyType, proposalDate,
     sections: orderedSections, logoUrl,
-    shareToken, showWatermark,
+    investmentRows, shareToken, showWatermark,
   });
 
   // Generate PDF with puppeteer-core + @sparticuz/chromium (Vercel-compatible)
@@ -132,9 +129,11 @@ export async function POST(request: Request) {
       printBackground: true,
       margin: { top: '0', right: '0', bottom: '40px', left: '0' },
       displayHeaderFooter: true,
-      headerTemplate: logoUrl
-        ? `<div style="width:100%;padding:8px 72px 0;box-sizing:border-box;"><img src="${logoUrl}" style="max-height:30px;max-width:120px;object-fit:contain;" /></div>`
-        : '<span></span>',
+      headerTemplate: `<div style="width:100%;padding:8px 72px 0;box-sizing:border-box;display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+        ${logoUrl ? `<img src="${logoUrl}" style="max-height:28px;max-width:100px;object-fit:contain;" />` : ''}
+        <span style="font-family:Arial,sans-serif;font-size:9pt;font-weight:bold;color:#111827;">${croName}</span>
+        <span style="font-family:Arial,sans-serif;font-size:9pt;color:#9ca3af;">— Confidential</span>
+      </div>`,
       footerTemplate: (() => {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://proposal-engine.vercel.app';
         const trackingUrl = shareToken

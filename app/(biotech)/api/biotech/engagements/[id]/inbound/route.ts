@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
+import { createClient } from '@supabase/supabase-js';
 import { biotechClaude } from '@biotech/lib/claude';
 import { buildFollowupPrompt, type FollowupOutput } from '@biotech/prompts/followup';
 import type { ExtractedData } from '@biotech/prompts/extract-brief';
@@ -200,6 +201,16 @@ export async function POST(
     });
   }
 
+  // Supersede any stale pending drafts for this engagement so Actions Needed
+  // doesn't keep showing the engagement based on an old, never-sent draft.
+  await supabase
+    .from('engagement_messages')
+    .update({ status: 'superseded' })
+    .eq('engagement_id', engagementId)
+    .eq('direction', 'outbound')
+    .eq('status', 'draft')
+    .eq('ai_generated', true);
+
   // Save the AI draft reply as a followup_draft message.
   // Also persist the gap analysis in ai_metadata so it can be restored on page reload
   // and so the "resolved" toggle can track which items the user has marked done.
@@ -214,12 +225,33 @@ export async function POST(
       status:        'draft',
       ai_generated:  true,
       ai_metadata: {
-        gap_analysis:   followup.gap_analysis,
-        resolved_items: [] as string[],
+        gap_analysis:    followup.gap_analysis,
+        resolved_items:  [] as string[],
+        is_bid_document: followup.is_bid_document ?? false,
+        bid_extracted:   followup.bid_extracted   ?? null,
       },
     })
     .select('id')
     .single();
+
+  // Insert notification via admin client (RLS requires service role for inserts)
+  const adminSupabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+  await adminSupabase.from('notifications').insert({
+    user_id:       user.id,
+    engagement_id: engagementId,
+    draft_id:      draftMsg?.id ?? null,
+    type:          followup.is_bid_document ? 'bid_received' : 'ai_draft_ready',
+    title:         followup.is_bid_document
+      ? `Bid received from ${engagement.cro_name}`
+      : `AI draft ready — ${engagement.cro_name}`,
+    body_text:     followup.is_bid_document
+      ? 'A bid/quote was detected in the CRO reply. Review the analysis and log the quote.'
+      : 'A CRO reply was analysed. Review the AI draft and approve to send.',
+    read:          false,
+  });
 
   // Only advance to followup_draft if we just moved to response_received.
   // At meeting_done or later, preserve the current stage.

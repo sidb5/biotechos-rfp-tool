@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveReplyTo } from '@shared/lib/email';
 
 function textToHtml(text: string): string {
   const escaped = text
@@ -126,12 +127,15 @@ export async function POST(
 
     const fromField = `${senderDisplayName} via BiotechOS <${verifiedFromEmail}>`;
 
+    // Resolve reply-to: assisted mode → app inbound address; native → user email
+    const replyToAddress = await resolveReplyTo(engagement_id, senderEmail, adminSupabase);
+
     const { data: sendData, error: sendError } = await resend.emails.send({
-      from:     fromField,
-      replyTo: senderEmail,
-      to:       cro_email,
+      from:    fromField,
+      replyTo: replyToAddress,
+      to:      cro_email,
       subject,
-      html:     textToHtml(messageBody),
+      html:    textToHtml(messageBody),
     });
 
     if (sendError) throw new Error(sendError.message);

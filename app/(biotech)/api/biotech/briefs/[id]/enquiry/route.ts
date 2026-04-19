@@ -252,15 +252,28 @@ export async function POST(
   if (existingEng) {
     engagementId = existingEng.id;
   } else {
+    // Snapshot the user's current capture_mode so the engagement's mode is locked
+    // for its lifetime regardless of future user setting changes.
+    let captureMode: 'assisted' | 'native' = 'assisted';
+    try {
+      const { data: userSettings } = await supabase
+        .from('biotech_user_settings')
+        .select('capture_mode')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (userSettings?.capture_mode === 'native') captureMode = 'native';
+    } catch { /* fallback to assisted */ }
+
     const { data: newEng, error: engErr } = await supabase
       .from('cro_engagements')
       .insert({
-        user_id:  user.id,
-        brief_id: briefId,
-        cro_id:   cro_id ?? null,
+        user_id:      user.id,
+        brief_id:     briefId,
+        cro_id:       cro_id ?? null,
         cro_name,
         cro_email,
-        stage:    'enquiry_draft',
+        stage:        'enquiry_draft',
+        capture_mode: captureMode,
       })
       .select('id')
       .single();

@@ -119,7 +119,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <AppShell title="Settings" navInLayout>
+      <AppShell title="Settings">
         <div className="flex items-center justify-center min-h-[60vh]">
           <svg className="h-6 w-6 animate-spin text-green-500" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -131,7 +131,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppShell title="Settings" navInLayout>
+    <AppShell title="Settings">
       <div className="max-w-xl mx-auto px-4 py-10 space-y-8">
 
         {/* ── Email identity (CRO only) ── */}

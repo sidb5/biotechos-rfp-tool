@@ -16,6 +16,7 @@
     "@stripe/stripe-js": "^9.1.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.49.4",
+    "@tailwindcss/typography": "^0.5.19",
     "adm-zip": "^0.5.16",
     "docx": "^9.6.1",
     "mammoth": "^1.12.0",
@@ -24,7 +25,9 @@
     "puppeteer-core": "^24.40.0",
     "react": "^18",
     "react-dom": "^18",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
     "resend": "^6.10.0",
     "stripe": "^22.0.0"
   },

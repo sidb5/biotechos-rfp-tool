@@ -18,7 +18,6 @@ Notes from meeting with Geeta
 -chrome extension to auto forward communications
 
 
--TODO - 4/16/2026
-also implement the new extension for biotech under folder gmail-extension-biotech with this workflo : once they have created study in the app. then the can come to their gmail account open extension click compose email--> click button in compose call something to the effect "create outreach email" which opens up our UI where they get to select one among their studies already created in the app, then select few CROs to send to and click generate email and then a single email goes out with all the selected ones in BCC and to being to self
-Now when they receive replies they can click generate reply - which logs the reply in our app generates the reply as well as shows the gap analysis.
+-TODO - 4/19
+i think when we have a notification bubble and/or response received stats is activited, then the engagement view should open with only those engagement at top that sorted by those that need approvals. or just put them under seperate nav menu action needed just like in CRO app where only those that need approval to send are listed and as user takes action of sending that row disappers from that list under that menu. Also there is something wrong with the ones in which user received emails response.. all the top buttons are non existant and also all those gaps etc that we had (top panel with vertical divider) and the bottom panel with email/meetings notes thread seems to have dissppaered in that engagmenet. why ?
 

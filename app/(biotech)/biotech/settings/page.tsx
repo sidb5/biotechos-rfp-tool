@@ -10,6 +10,7 @@ interface Settings {
   company_name: string;
   scheduling_link: string;
   response_deadline_days: number;
+  capture_mode: 'assisted' | 'native';
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -33,6 +34,7 @@ export default function BiotechSettingsPage() {
     company_name:           '',
     scheduling_link:        '',
     response_deadline_days: 10,
+    capture_mode:           'assisted',
   });
   const [loading, setLoading]   = useState(true);
   const [status, setStatus]     = useState<SaveStatus>('idle');
@@ -49,7 +51,7 @@ export default function BiotechSettingsPage() {
       try {
         const { data } = await supabase
           .from('biotech_user_settings')
-          .select('sender_display_name, sender_email, company_name, scheduling_link, response_deadline_days')
+          .select('sender_display_name, sender_email, company_name, scheduling_link, response_deadline_days, capture_mode')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -60,6 +62,7 @@ export default function BiotechSettingsPage() {
             company_name:           data.company_name           ?? '',
             scheduling_link:        data.scheduling_link        ?? '',
             response_deadline_days: data.response_deadline_days ?? 10,
+            capture_mode:           (data.capture_mode as 'assisted' | 'native') ?? 'assisted',
           });
         } else {
           const metaName =
@@ -103,6 +106,7 @@ export default function BiotechSettingsPage() {
       company_name:           form.company_name.trim()         || null,
       scheduling_link:        form.scheduling_link.trim()      || null,
       response_deadline_days: form.response_deadline_days,
+      capture_mode:           form.capture_mode,
       updated_at:             new Date().toISOString(),
     };
 
@@ -276,6 +280,68 @@ export default function BiotechSettingsPage() {
               {errors.scheduling_link && (
                 <p className="text-xs text-red-600">{errors.scheduling_link}</p>
               )}
+            </div>
+          </section>
+
+          {/* ── Reply capture mode ── */}
+          <section className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700">Reply capture mode</h2>
+              <p className="mt-1 text-xs text-gray-500">
+                Controls how CRO replies are handled. Changes only affect new engagements — existing ones keep the mode they were created with.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Assisted */}
+              <label className={`flex gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                form.capture_mode === 'assisted'
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="capture_mode"
+                  value="assisted"
+                  checked={form.capture_mode === 'assisted'}
+                  onChange={() => {
+                    setForm(prev => ({ ...prev, capture_mode: 'assisted' }));
+                    if (status === 'saved') setStatus('idle');
+                  }}
+                  className="mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Assisted <span className="ml-1.5 text-xs font-normal text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">recommended</span></p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    CRO replies route to BiotechOS. The app captures each reply, generates a suggested draft, and notifies you when it&apos;s ready to review. You approve before anything sends.
+                  </p>
+                </div>
+              </label>
+
+              {/* Native */}
+              <label className={`flex gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                form.capture_mode === 'native'
+                  ? 'border-gray-400 bg-gray-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="capture_mode"
+                  value="native"
+                  checked={form.capture_mode === 'native'}
+                  onChange={() => {
+                    setForm(prev => ({ ...prev, capture_mode: 'native' }));
+                    if (status === 'saved') setStatus('idle');
+                  }}
+                  className="mt-0.5 accent-gray-600"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Native</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    CRO replies go directly to your inbox — same as regular email. The app does not capture or draft responses for these engagements. Use this if you prefer to manage follow-up yourself.
+                  </p>
+                </div>
+              </label>
             </div>
           </section>
 

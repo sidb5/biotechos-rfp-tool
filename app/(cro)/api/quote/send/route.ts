@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import { quoteSentTemplate } from '@shared/lib/email-templates';
+import { resolveReplyTo } from '@shared/lib/email';
 
 // POST — send quote via email + mark as complete + enable sharing
 // Body: { proposal_id: string, recipient_email: string, message?: string }
@@ -56,39 +57,65 @@ export async function POST(request: Request) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cro-rfp-tool.vercel.app';
   const shareUrl = `${appUrl}/q/${proposal.share_token}`;
 
-  // Extract scope summary from quote_data for email preview
-  const quoteData = proposal.quote_data as { scope?: string } | null;
+  const quoteData = proposal.quote_data as { scope?: string; mode?: string } | null;
   const scopeSummary = quoteData?.scope ?? undefined;
+  const isFullProposal = quoteData?.mode === 'full_proposal';
 
   const rfpData = proposal.rfps as { biotech_name?: string } | null;
   const biotechName = rfpData?.biotech_name ?? 'your company';
   const croCompanyName = profile.company_name ?? 'Our team';
 
-  // Build email
-  // Access code = last 6 chars of share token
   const accessCode = (proposal.share_token as string).slice(-6);
-
   const { subject: defaultSubject, html } = quoteSentTemplate({
-    biotechName,
-    croCompanyName,
-    shareUrl,
-    accessCode,
-    scopeSummary,
+    biotechName, croCompanyName, shareUrl, accessCode, scopeSummary,
+    documentType: isFullProposal ? 'rfp_bid' : 'quote',
   });
 
   const finalSubject = customSubject?.trim() || defaultSubject;
-  const replyTo = customReplyTo?.trim() || (profile.sender_email ?? user.email ?? undefined);
   const senderName = profile.sender_display_name ?? profile.company_name ?? 'CRO Proposal Engine';
-
-  // Use verified from address (Resend testing domain, or custom verified domain)
   const verifiedFrom = process.env.BIOTECH_OUTREACH_EMAIL ?? 'onboarding@resend.dev';
   const fromField = `${senderName} via BiotechOS <${verifiedFrom}>`;
 
-  // Send via Resend directly (not sendEmail helper) so we can set from + reply_to
   const adminSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+
+  // ── Create a cro_engagement to own the reply thread ──────────────────────────
+  // This wires the quote into the assisted-mode capture pipeline so replies
+  // come back to the app, trigger an AI draft, and generate a notification.
+  const now = new Date().toISOString();
+  let engagementId: string | null = null;
+  let replyTo: string = profile.sender_email ?? user.email ?? '';
+
+  try {
+    const { data: newEng } = await adminSupabase
+      .from('cro_engagements')
+      .insert({
+        user_id:      user.id,
+        cro_name:     biotechName,
+        cro_email:    recipientEmail.trim().toLowerCase(),
+        initiator:    'cro',
+        capture_mode: 'assisted',
+        stage:        'enquiry_sent',
+        created_at:   now,
+        updated_at:   now,
+      })
+      .select('id')
+      .single();
+
+    if (newEng?.id) {
+      engagementId = newEng.id;
+      // resolveReplyTo returns the inbound address when RESEND_INBOUND_DOMAIN is
+      // set, otherwise falls back to the user's email (native-mode behaviour).
+      replyTo = await resolveReplyTo(newEng.id, user.email!, adminSupabase);
+      // Persist the link so the quote page can always find the conversation.
+      await supabase
+        .from('proposals')
+        .update({ engagement_id: engagementId })
+        .eq('id', proposalId);
+    }
+  } catch { /* non-fatal — email still sends, just without capture */ }
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -100,16 +127,29 @@ export async function POST(request: Request) {
     const resend = new Resend(apiKey);
 
     const { error: resendErr } = await resend.emails.send({
-      from: fromField,
-      to: recipientEmail.trim(),
-      replyTo: replyTo,
+      from:    fromField,
+      to:      recipientEmail.trim(),
+      replyTo: replyTo || undefined,
       subject: finalSubject,
       html,
     });
 
     if (resendErr) throw new Error(resendErr.message);
 
-    // Log success
+    // Record the sent quote as the first outbound message on the engagement
+    if (engagementId) {
+      await adminSupabase.from('engagement_messages').insert({
+        engagement_id: engagementId,
+        direction:     'outbound',
+        message_type:  'response',
+        status:        'sent',
+        subject:       finalSubject,
+        body:          `Quote sent. View at: ${shareUrl}\n\n${scopeSummary ?? ''}`.trim(),
+        ai_generated:  false,
+        created_at:    now,
+      });
+    }
+
     await adminSupabase.from('email_logs').insert({
       user_id: user.id,
       template_name: 'quote_sent',
@@ -120,6 +160,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      engagement_id: engagementId,
       share_token: proposal.share_token,
       share_views: proposal.share_views ?? 0,
     });

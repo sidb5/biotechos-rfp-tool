@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveReplyTo } from '@shared/lib/email';
 
 function textToHtml(text: string): string {
   const escaped = text
@@ -90,12 +91,15 @@ export async function POST(
     const { Resend } = await import('resend');
     const resend     = new Resend(resendApiKey);
 
+    // Resolve reply-to: assisted mode → app inbound address; native → user email
+    const replyToAddress = await resolveReplyTo(engagementId, senderEmail, adminSupabase);
+
     const { data: sendData, error: sendError } = await resend.emails.send({
-      from:     `${senderDisplayName} via BiotechOS <${verifiedFromEmail}>`,
-      replyTo: senderEmail,
+      from:    `${senderDisplayName} via BiotechOS <${verifiedFromEmail}>`,
+      replyTo: replyToAddress,
       to:      engagement.cro_email,
       subject,
-      html:     textToHtml(msgBody),
+      html:    textToHtml(msgBody),
     });
 
     if (sendError) throw new Error(sendError.message);
@@ -114,6 +118,17 @@ export async function POST(
       .from('engagement_messages')
       .update({ status: 'sent', sent_at: new Date().toISOString(), resend_message_id: resendMessageId })
       .eq('id', message_id);
+
+    // Supersede any other stale pending AI drafts for this engagement.
+    // Handles old data created before the inbound route began superseding them automatically.
+    await supabase
+      .from('engagement_messages')
+      .update({ status: 'superseded' })
+      .eq('engagement_id', engagementId)
+      .eq('direction', 'outbound')
+      .eq('status', 'draft')
+      .eq('ai_generated', true)
+      .neq('id', message_id);
 
     // Stage transitions
     if (messageType === 'followup' && engagement.stage === 'followup_draft') {

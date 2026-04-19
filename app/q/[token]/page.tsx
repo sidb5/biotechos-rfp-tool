@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,8 +18,14 @@ interface QuoteData {
   _hideUnitPrices?: boolean;
 }
 
+interface ProposalSection {
+  section_name: string;
+  content: string;
+}
+
 interface QuotePayload {
   quote_data: QuoteData;
+  proposal_sections: ProposalSection[];
   cro_company: string;
   biotech_name: string;
   created_at: string;
@@ -25,6 +33,10 @@ interface QuotePayload {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function stripLeadingHeading(content: string): string {
+  return (content ?? '').replace(/^#{1,3} [^\n]*\n?/, '').trimStart();
 }
 
 // ─── Read-only blocks ─────────────────────────────────────────────────────────
@@ -116,6 +128,50 @@ function ReadonlyNextSteps({ lines }: { lines: string[] }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+// Human-readable section titles matching the stored section_name keys
+const SECTION_LABELS: Record<string, string> = {
+  executive_summary:     'Executive Summary',
+  technical_approach:    'Technical Approach',
+  team_qualifications:   'Team & Qualifications',
+  facility_overview:     'Facility Overview',
+  proposed_timeline:     'Proposed Timeline',
+  pricing_template:      'Pricing',
+  assumptions_exclusions:'Assumptions & Exclusions',
+};
+
+function FullProposalView({ sections }: { sections: ProposalSection[] }) {
+  if (!sections.length) {
+    return (
+      <div className="py-12 text-center text-sm text-gray-400">
+        Proposal sections are being prepared. Check back shortly.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-10">
+      {sections.map(s => (
+        <section key={s.section_name}>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+            {SECTION_LABELS[s.section_name] ?? s.section_name.replace(/_/g, ' ')}
+          </h2>
+          <div className="prose prose-sm prose-gray max-w-none
+            prose-headings:font-semibold prose-headings:text-gray-900
+            prose-h2:text-base prose-h3:text-sm
+            prose-p:text-gray-800 prose-p:leading-relaxed
+            prose-strong:text-gray-900 prose-strong:font-semibold
+            prose-ul:text-gray-800 prose-ol:text-gray-800
+            prose-li:my-0.5
+            [&_table]:border-collapse [&_table]:w-full [&_table]:my-3 [&_table]:text-sm
+            [&_th]:border [&_th]:border-gray-200 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_th]:bg-gray-50 [&_th]:text-gray-700
+            [&_td]:border [&_td]:border-gray-200 [&_td]:px-3 [&_td]:py-1.5 [&_td]:text-gray-700 [&_td]:align-top">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripLeadingHeading(s.content)}</ReactMarkdown>
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -215,7 +271,7 @@ export default function PublicQuotePage() {
               type="submit"
               className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-500 transition-colors"
             >
-              View quote →
+              View document →
             </button>
           </form>
         </div>
@@ -225,6 +281,7 @@ export default function PublicQuotePage() {
 
   // state === 'quote'
   const qd = quote!.quote_data;
+  const isFullProposal = qd.mode === 'full_proposal';
 
   return (
     <div className="min-h-screen bg-white">
@@ -251,7 +308,7 @@ export default function PublicQuotePage() {
       <header className="border-b border-gray-100 px-6 py-5">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-xl font-bold text-gray-900">
-            Proposal for {quote!.biotech_name}
+            {isFullProposal ? 'Proposal Response' : 'Quote'} for {quote!.biotech_name}
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             Prepared {quote!.created_at ? formatDate(quote!.created_at) : ''}
@@ -259,11 +316,29 @@ export default function PublicQuotePage() {
           </p>
         </div>
       </header>
+
       <main className="max-w-2xl mx-auto px-6 py-10">
-        <ReadonlyScope text={qd.scope} />
-        <ReadonlyTimeline rows={qd.timeline ?? []} />
-        <ReadonlyInvestment rows={qd.investment ?? []} hideUnitPrices={qd._hideUnitPrices ?? false} />
-        <ReadonlyNextSteps lines={qd.next_steps ?? []} />
+        {isFullProposal ? (
+          <>
+            <FullProposalView sections={quote!.proposal_sections ?? []} />
+            {/* Always show pricing + next steps from quote_data even in full proposal mode */}
+            {qd.investment?.some(r => r.item) && (
+              <div className="mt-10 pt-10 border-t border-gray-100">
+                <ReadonlyInvestment rows={qd.investment} hideUnitPrices={qd._hideUnitPrices ?? false} />
+              </div>
+            )}
+            {qd.next_steps?.some(l => l.trim()) && (
+              <ReadonlyNextSteps lines={qd.next_steps} />
+            )}
+          </>
+        ) : (
+          <>
+            <ReadonlyScope text={qd.scope} />
+            <ReadonlyTimeline rows={qd.timeline ?? []} />
+            <ReadonlyInvestment rows={qd.investment ?? []} hideUnitPrices={qd._hideUnitPrices ?? false} />
+            <ReadonlyNextSteps lines={qd.next_steps ?? []} />
+          </>
+        )}
       </main>
 
       {/* Bottom CTA banner */}

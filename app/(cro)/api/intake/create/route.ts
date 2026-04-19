@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import { getPlan, getUsage, incrementUsage } from '@shared/lib/get-plan';
 import { canAccess } from '@shared/lib/feature-flags';
+import { anthropic } from '@shared/lib/claude';
+import { SYSTEM_PROMPT } from '@cro/prompts/index';
 
 // ─── Create RFP + draft proposal from analyzed intake ────────────────────────
 // Called once the user has confirmed they want to proceed.
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
   // Verify CRO profile ownership
   const { data: profile } = await supabase
     .from('cro_profiles')
-    .select('id')
+    .select('id, company_name, assay_types, therapeutic_areas, facility_description')
     .eq('id', body.cro_profile_id)
     .eq('user_id', user.id)
     .single();
@@ -95,9 +97,40 @@ export async function POST(request: Request) {
   }
 
   const requestType = body.parsed_summary?.request_type as string | undefined;
+  const parsed = body.parsed_summary ?? {};
+
+  // Generate scope server-side so it is ready when the quote page opens.
+  // Fire this now while we still have all context; fall back to '' on error.
+  let scopeText = '';
+  try {
+    const scopePrompt = `Write a concise 3-5 sentence scope description for a quick quote from a preclinical CRO to a biotech client.
+
+Sponsor: ${(parsed.biotech_name as string) ?? 'the client'}
+Study type: ${(parsed.study_type as string) ?? 'preclinical study'}
+Assay types: ${Array.isArray(parsed.assay_types) ? (parsed.assay_types as string[]).join(', ') : 'as discussed'}
+Species: ${(parsed.species as string) ?? 'to be confirmed'}
+Key endpoints: ${Array.isArray(parsed.primary_endpoints) ? (parsed.primary_endpoints as string[]).slice(0, 3).join(', ') : 'as specified'}
+Timeline: ${parsed.timeline_weeks ? `${parsed.timeline_weeks} weeks` : 'to be confirmed'}
+Special requirements: ${Array.isArray(parsed.special_requirements) ? (parsed.special_requirements as string[]).join(', ') : 'none noted'}
+
+CRO: ${profile.company_name ?? 'our team'}
+CRO capabilities: ${Array.isArray(profile.assay_types) ? (profile.assay_types as string[]).join(', ') : 'preclinical services'}
+
+Write in first person ("We will..."). Be specific to the study requested. No generic filler. No headings. Return only the scope paragraph text.`;
+
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: scopePrompt }],
+    });
+    const block = msg.content[0];
+    if (block.type === 'text') scopeText = block.text.trim();
+  } catch { /* non-fatal — client-side regeneration still available */ }
+
   const quoteData = {
     mode: requestType === 'formal_rfp' ? 'full_proposal' : 'quick_quote',
-    scope: '',
+    scope: scopeText,
     timeline: [
       { label: 'Study start',    description: '', date: '' },
       { label: 'Key milestone',  description: '', date: '' },

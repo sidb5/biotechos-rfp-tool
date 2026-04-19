@@ -5,6 +5,8 @@ export interface ProposalPDFData {
   proposalDate: string;
   sections: { name: string; label: string; content: string }[];
   logoUrl?: string | null;
+  /** Investment rows for the pricing table (from quote_data.investment) */
+  investmentRows?: { item: string; qty: string; unit_price: string; total: string }[];
   /** Share token for generating recipient landing page URL (Mechanic D) */
   shareToken?: string | null;
   /** Whether to show the free-plan powered-by footer (Mechanic A) */
@@ -17,8 +19,8 @@ const SECTION_ORDER = [
   'team_qualifications',
   'facility_overview',
   'proposed_timeline',
-  'pricing',
   'assumptions_exclusions',
+  'pricing',
 ];
 
 const SECTION_LABELS: Record<string, string> = {
@@ -31,9 +33,63 @@ const SECTION_LABELS: Record<string, string> = {
   assumptions_exclusions: 'Assumptions & Exclusions',
 };
 
+// Strip the leading ## Heading line that AI content starts with (section label already rendered separately)
+function stripLeadingHeading(content: string): string {
+  return (content ?? '').replace(/^#{1,3} [^\n]*\n?/, '').trimStart();
+}
+
+// Convert a markdown table block to an HTML table
+function mdTableToHtml(block: string): string {
+  const lines = block.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 2) return block;
+  const parseRow = (line: string) =>
+    line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+  const isSeparator = (line: string) => /^\|[-:| ]+\|$/.test(line.trim());
+  const headerCells = parseRow(lines[0]);
+  const rows: string[][] = [];
+  for (let i = 2; i < lines.length; i++) {
+    if (!isSeparator(lines[i])) rows.push(parseRow(lines[i]));
+  }
+  const thead = `<thead><tr>${headerCells.map(c => `<th>${c}</th>`).join('')}</tr></thead>`;
+  const tbody = `<tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  return `<table>${thead}${tbody}</table>`;
+}
+
 // Convert markdown-style content to basic HTML
 function markdownToHtml(text: string): string {
-  return text
+  // Strip leading heading first
+  const cleaned = stripLeadingHeading(text);
+
+  // Split into blocks, handle markdown tables as whole units
+  const lines = cleaned.split('\n');
+  const blocks: string[] = [];
+  let tableLines: string[] = [];
+  let inTable = false;
+
+  for (const line of lines) {
+    const isTableLine = /^\|.+\|$/.test(line.trim());
+    if (isTableLine) {
+      inTable = true;
+      tableLines.push(line);
+    } else {
+      if (inTable) {
+        blocks.push('__TABLE__' + tableLines.join('\n') + '__ENDTABLE__');
+        tableLines = [];
+        inTable = false;
+      }
+      blocks.push(line);
+    }
+  }
+  if (inTable && tableLines.length) {
+    blocks.push('__TABLE__' + tableLines.join('\n') + '__ENDTABLE__');
+  }
+
+  let result = blocks.join('\n');
+
+  // Replace table markers
+  result = result.replace(/__TABLE__([\s\S]*?)__ENDTABLE__/g, (_, t) => mdTableToHtml(t));
+
+  return result
     // Headings
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
@@ -44,52 +100,84 @@ function markdownToHtml(text: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Horizontal rules
     .replace(/^---+$/gm, '<hr>')
-    // Table rows (simple pipe-delimited)
-    .replace(/^\|(.+)\|$/gm, (match) => {
-      const cells = match.slice(1, -1).split('|').map(c => c.trim());
-      const isHeader = false;
-      return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`;
-    })
-    // Separator rows in tables (e.g. |---|---|)
-    .replace(/<tr><td>[-: ]+<\/td>(<td>[-: ]+<\/td>)*<\/tr>/g, '')
     // Bullet lists
     .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
     // Numbered lists
     .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
     // Paragraphs (double newline)
     .replace(/\n\n/g, '</p><p>')
-    // Single newlines to <br> inside paragraphs
+    // Single newlines to <br>
     .replace(/\n/g, '<br>');
-}
-
-function wrapTables(html: string): string {
-  // Wrap consecutive <tr> blocks in <table>
-  return html.replace(/(<tr>[\s\S]*?<\/tr>(\s*<tr>[\s\S]*?<\/tr>)*)/g, '<table>$1</table>');
 }
 
 function wrapLists(html: string): string {
   return html.replace(/(<li>[\s\S]*?<\/li>(\s*<li>[\s\S]*?<\/li>)*)/g, '<ul>$1</ul>');
 }
 
+function buildPricingTableHtml(rows: { item: string; qty: string; unit_price: string; total: string }[]): string {
+  const filled = rows.filter(r => r.item.trim());
+  if (!filled.length) return '<p><em>Pricing to be confirmed — contact us for a detailed quote.</em></p>';
+  const total = filled.reduce((sum, r) => {
+    const t = parseFloat(r.total.replace(/[$,]/g, ''));
+    return sum + (isNaN(t) ? 0 : t);
+  }, 0);
+  const dataRows = filled.map(r => `
+    <tr>
+      <td>${r.item}</td>
+      <td style="text-align:right">${r.qty || '—'}</td>
+      <td style="text-align:right">${r.unit_price || '—'}</td>
+      <td style="text-align:right;font-weight:bold">${r.total || '—'}</td>
+    </tr>`).join('');
+  return `
+    <table>
+      <thead>
+        <tr>
+          <th>Line Item</th><th style="text-align:right">Qty</th>
+          <th style="text-align:right">Unit Cost</th><th style="text-align:right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataRows}
+        <tr style="background:#f9fafb">
+          <td colspan="3" style="font-weight:bold">Total</td>
+          <td style="text-align:right;font-weight:bold">${total > 0 ? `$${total.toLocaleString('en-US')}` : '—'}</td>
+        </tr>
+      </tbody>
+    </table>`;
+}
+
 export function buildProposalHTML(data: ProposalPDFData): string {
-  const orderedSections = SECTION_ORDER
+  // Sections excluding pricing (handled separately with investment rows)
+  const nonPricingSections = SECTION_ORDER.filter(n => n !== 'pricing')
     .map(name => data.sections.find(s => s.name === name))
     .filter(Boolean) as { name: string; label: string; content: string }[];
 
-  const tocItems = orderedSections
-    .map((s, i) => `<li>${i + 1}. ${SECTION_LABELS[s.name] ?? s.label}</li>`)
+  // Always include pricing as the last section in TOC
+  const allSectionNames = [...nonPricingSections.map(s => s.name), 'pricing'];
+
+  const tocItems = allSectionNames
+    .map((name, i) => `<li>${i + 1}. ${SECTION_LABELS[name] ?? name.replace(/_/g, ' ')}</li>`)
     .join('');
 
-  const sectionPages = orderedSections.map(s => {
+  const sectionPages = nonPricingSections.map((s, i) => {
     let html = markdownToHtml(s.content ?? '');
-    html = wrapTables(html);
     html = wrapLists(html);
+    // First section gets no extra top margin; subsequent ones get spacing but NO forced page break
+    const topStyle = i === 0 ? '' : 'margin-top:48px;';
     return `
-      <div class="section page-break">
+      <div class="section" style="${topStyle}">
         <h2 class="section-title">${SECTION_LABELS[s.name] ?? s.label}</h2>
         <div class="section-content"><p>${html}</p></div>
       </div>`;
   }).join('');
+
+  // Pricing section at the end
+  const investmentRows = data.investmentRows ?? [];
+  const pricingSection = `
+    <div class="section" style="margin-top:48px;">
+      <h2 class="section-title">Pricing</h2>
+      <div class="section-content">${buildPricingTableHtml(investmentRows)}</div>
+    </div>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -194,9 +282,6 @@ export function buildProposalHTML(data: ProposalPDFData): string {
     .section {
       padding: 72px;
     }
-    .page-break {
-      page-break-before: always;
-    }
     .section-title {
       font-size: 18pt;
       color: #111827;
@@ -231,9 +316,12 @@ export function buildProposalHTML(data: ProposalPDFData): string {
       text-align: left;
       vertical-align: top;
     }
-    .section-content tr:first-child td {
-      background: #f9fafb;
+    .section-content thead th {
+      background: #f3f4f6;
       font-weight: bold;
+    }
+    .section-content tr:nth-child(even) td {
+      background: #fafafa;
     }
     .section-content strong { color: #111827; }
     .section-content em { font-style: italic; }
@@ -255,10 +343,13 @@ export function buildProposalHTML(data: ProposalPDFData): string {
 
   <!-- Cover page -->
   <div class="cover" style="position:relative;">
-    ${data.logoUrl
-      ? `<img src="${data.logoUrl}" alt="${data.croName} logo" style="max-width:200px;max-height:80px;object-fit:contain;margin-bottom:32px;" />`
-      : `<div class="cover-label">Proposal — Confidential</div>`
-    }
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:32px;">
+      ${data.logoUrl
+        ? `<img src="${data.logoUrl}" alt="${data.croName} logo" style="max-width:160px;max-height:64px;object-fit:contain;" />`
+        : ''
+      }
+      <div class="cover-label" style="margin-bottom:0">${data.croName}</div>
+    </div>
     <div class="cover-title">Proposal to ${data.biotechName}</div>
     <div class="cover-subtitle">${data.studyType}</div>
     <div class="cover-meta">
@@ -293,6 +384,7 @@ export function buildProposalHTML(data: ProposalPDFData): string {
 
   <!-- Proposal sections -->
   ${sectionPages}
+  ${pricingSection}
 
 </body>
 </html>`;

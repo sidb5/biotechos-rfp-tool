@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse }              from 'next/server';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
-import { sendEmail } from '@shared/lib/email';
-import { welcomeTemplate } from '@shared/lib/email-templates';
+import { sendEmail }                  from '@shared/lib/email';
+import { welcomeTemplate }            from '@shared/lib/email-templates';
+import { checkCorporateEmail }        from '@shared/lib/email-domain';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -12,8 +13,17 @@ export async function GET(request: Request) {
     const supabase = createSupabaseServerClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.session) {
-      // Send welcome email for brand-new accounts (created within last 10 min)
+      // Corporate-domain gate (Task 13) — enforce server-side for OAuth flows
       const user = data.session.user;
+      const domainCheck = checkCorporateEmail(user.email ?? '');
+      if (!domainCheck.ok) {
+        // Sign the user back out — they shouldn't have an active session
+        await supabase.auth.signOut();
+        const msg = encodeURIComponent(domainCheck.message ?? 'Work email required');
+        return NextResponse.redirect(`${origin}/auth/error?error=${msg}`);
+      }
+
+      // Send welcome email for brand-new accounts (created within last 10 min)
       const createdAt = user.created_at;
       const isNew = createdAt && Date.now() - new Date(createdAt).getTime() < 10 * 60 * 1000;
       if (isNew) {

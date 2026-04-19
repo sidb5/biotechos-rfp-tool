@@ -24,48 +24,54 @@ export default async function RequestsPage() {
 
   const { data: proposals } = await supabase
     .from('proposals')
-    .select('id, status, created_at, rfps(biotech_name, parsed_summary)')
+    .select('id, status, created_at, quote_data, rfps(biotech_name, parsed_summary)')
     .eq('cro_id', profile.id)
     .order('created_at', { ascending: false });
 
-  const allRequests = proposals ?? [];
+  // Show only formal RFP responses on this page
+  const rfpResponses = (proposals ?? []).filter(p => {
+    const rfpData = p.rfps as { parsed_summary?: { request_type?: string } } | null;
+    const mode = (p.quote_data as { mode?: string } | null)?.mode;
+    return rfpData?.parsed_summary?.request_type === 'formal_rfp' || mode === 'full_proposal';
+  });
 
   return (
-    <AppShell title="Requests" navInLayout>
+    <AppShell title="RFP Bids" navInLayout>
       <div className="max-w-3xl mx-auto px-4 py-6">
-        {allRequests.length === 0 ? (
+        {rfpResponses.length === 0 ? (
 
           /* ── Empty state ──────────────────────────────────────────────── */
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <p className="text-sm font-medium text-gray-600 mb-1">No requests yet.</p>
+            <p className="text-sm font-medium text-gray-600 mb-1">No RFP responses yet.</p>
             <p className="text-sm text-gray-400 mb-6">
-              Paste a client request from your dashboard to get started.
+              When a client sends a formal RFP, create your response here.
             </p>
             <a
-              href="/dashboard"
+              href="/rfp/new?mode=formal_rfp"
               className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors"
             >
-              Go to dashboard →
+              + New RFP Bid →
             </a>
           </div>
 
         ) : (
 
-          /* ── Requests list ────────────────────────────────────────────── */
+          /* ── RFP Responses list ───────────────────────────────────────── */
           <ul className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-50 overflow-hidden">
-            {allRequests.map(p => {
+            {rfpResponses.map(p => {
               const rfpData = p.rfps as {
                 biotech_name?: string;
-                parsed_summary?: { study_type?: string; request_type?: string };
+                parsed_summary?: { study_type?: string };
               } | null;
-              const requestTypeLabel =
-                rfpData?.parsed_summary?.request_type === 'formal_rfp'
-                  ? 'Formal RFP'
-                  : 'Quick quote';
+              const statusColors: Record<string, string> = {
+                draft:    'bg-amber-50 text-amber-600',
+                complete: 'bg-green-50 text-green-700',
+              };
+              const statusColor = statusColors[p.status ?? ''] ?? 'bg-gray-100 text-gray-500';
               return (
                 <li key={p.id}>
                   <a
-                    href={`/quote/${p.id}`}
+                    href={`/rfp/${p.id}`}
                     className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
@@ -73,8 +79,8 @@ export default async function RequestsPage() {
                         {rfpData?.biotech_name ?? 'Unknown client'}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
-                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px] font-medium">
-                          {requestTypeLabel}
+                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${statusColor}`}>
+                          {p.status === 'complete' ? 'Sent' : 'Draft'}
                         </span>
                         {p.created_at ? formatDate(p.created_at) : '—'}
                       </p>

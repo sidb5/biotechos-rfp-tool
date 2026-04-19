@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Internal email sender — wraps Resend and logs every attempt.
 // Never throws — always resolves, even on failure.
@@ -72,6 +73,47 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ ok: boolean; 
 
     return { ok: false, error: msg };
   }
+}
+
+// ── Reply-To routing ────────────────────────────────────────────────────────
+//
+// For assisted-mode engagements, outbound emails use a per-engagement
+// reply-to address (e.{engagementId}@{RESEND_INBOUND_DOMAIN}) so replies
+// arrive at the app's inbound webhook rather than the user's inbox.
+//
+// For native-mode engagements, the user's own email is used.
+// When RESEND_INBOUND_DOMAIN is not configured, falls back to userEmail
+// regardless of mode (safe degradation — inbound capture just won't work).
+
+export async function resolveReplyTo(
+  engagementId: string,
+  userEmail: string,
+  adminSupabase: SupabaseClient,
+): Promise<string> {
+  const inboundDomain = process.env.RESEND_INBOUND_DOMAIN;
+
+  const { data: eng } = await adminSupabase
+    .from('cro_engagements')
+    .select('capture_mode, reply_to_address')
+    .eq('id', engagementId)
+    .single();
+
+  if (!eng || eng.capture_mode !== 'assisted' || !inboundDomain) {
+    return userEmail;
+  }
+
+  // Build deterministic address from engagement id
+  const assistedReplyTo = `e.${engagementId}@${inboundDomain}`;
+
+  // Persist if not already stored (first send)
+  if (!eng.reply_to_address) {
+    await adminSupabase
+      .from('cro_engagements')
+      .update({ reply_to_address: assistedReplyTo })
+      .eq('id', engagementId);
+  }
+
+  return assistedReplyTo;
 }
 
 // Check if user has opted in to a given email type

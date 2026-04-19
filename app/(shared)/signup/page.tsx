@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@shared/lib/supabase';
 import VerifyBusiness from '@shared/components/VerifyBusiness';
+import { checkCorporateEmail } from '@shared/lib/email-domain';
 
 type Step = 'persona' | 'signup' | 'verify';
 type UserType = 'cro' | 'biotech';
@@ -89,6 +90,14 @@ function SignupPageInner() {
 
     if (password.length < 8) {
       setError('Password must be at least 8 characters.');
+      setLoading(false);
+      return;
+    }
+
+    // Corporate-domain gate (Task 13)
+    const domainCheck = checkCorporateEmail(email);
+    if (!domainCheck.ok) {
+      setError(domainCheck.message ?? 'Please use your work email.');
       setLoading(false);
       return;
     }

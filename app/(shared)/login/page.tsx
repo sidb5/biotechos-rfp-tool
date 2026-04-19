@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@shared/lib/supabase';
+import { checkCorporateEmail } from '@shared/lib/email-domain';
 
 type Step = 'persona' | 'login';
 type UserType = 'cro' | 'biotech';
@@ -43,6 +44,14 @@ function LoginPageInner() {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    // Corporate-domain gate (Task 13)
+    const domainCheck = checkCorporateEmail(email);
+    if (!domainCheck.ok) {
+      setError(domainCheck.message ?? 'Please use your work email.');
+      setLoading(false);
+      return;
+    }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
