@@ -408,6 +408,8 @@ export default function EngagementThreadPage() {
             draft_subject:       existingFollowup.subject ?? '',
             draft_reply:         existingFollowup.body    ?? '',
             suggested_questions: [],
+            is_bid_document:     meta.is_bid_document     ?? false,
+            bid_extracted:       meta.bid_extracted        ?? null,
           } as FollowupOutput);
         }
         if (meta?.resolved_items) {
