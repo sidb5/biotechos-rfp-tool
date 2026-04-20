@@ -68,10 +68,33 @@ export async function POST(req: NextRequest) {
   console.log('[inbound] data keys:', Object.keys(payload as unknown as Record<string, unknown>));
   console.log('[inbound] has text?', !!(payload as ResendInboundPayload).text, 'has html?', !!(payload as ResendInboundPayload).html);
 
-  const { from, to, subject, text, html } = payload;
+  const { from, to, subject } = payload;
   // Resend may send message_id (snake_case) or messageId (camelCase)
   const rawPayload = payload as unknown as Record<string, unknown>;
   const messageId = (payload.messageId ?? rawPayload.message_id) as string | undefined;
+  const emailId   = rawPayload.email_id as string | undefined;
+
+  // Resend's email.received webhook does NOT include text/html body in the
+  // payload — only metadata. Fetch the full body via the API using email_id.
+  let text: string | undefined = payload.text;
+  let html: string | undefined = payload.html;
+  if (!text && !html && emailId && process.env.RESEND_API_KEY) {
+    try {
+      const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
+        headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}` },
+      });
+      if (res.ok) {
+        const fullEmail = await res.json() as { text?: string; html?: string };
+        text = fullEmail.text;
+        html = fullEmail.html;
+        console.log('[inbound] Fetched body from API — text?', !!text, 'html?', !!html);
+      } else {
+        console.warn('[inbound] Resend API fetch failed', res.status, await res.text().catch(() => ''));
+      }
+    } catch (err) {
+      console.error('[inbound] Resend API fetch error', err);
+    }
+  }
 
   // ── Parse engagement address ──────────────────────────────────────────────
 
