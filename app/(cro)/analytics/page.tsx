@@ -76,15 +76,27 @@ export default async function AnalyticsPage() {
   const decidedOutcomes = ['won', 'lost', 'no_decision', 'withdrawn'];
   const decidedProposals = proposals.filter(p => decidedOutcomes.includes(p.outcome ?? ''));
   const wonProposals     = proposals.filter(p => p.outcome === 'won');
-  const pendingCount     = proposals.filter(p => p.outcome === 'pending' || !p.outcome).length;
+
+  // Only sent (status=complete) proposals without a decided outcome count as pending.
+  // Draft proposals with no outcome should not appear here.
+  const pendingCount = proposals.filter(
+    p => p.status === 'complete' && (!p.outcome || p.outcome === 'pending'),
+  ).length;
 
   const winRate = decidedProposals.length > 0
     ? Math.round((wonProposals.length / decidedProposals.length) * 100)
     : null;
 
-  const totalContractValue = wonProposals.reduce((sum, p) => sum + ((p.contract_value as number) ?? 0), 0);
-  const avgContractValue = wonProposals.filter(p => p.contract_value).length > 0
-    ? totalContractValue / wonProposals.filter(p => p.contract_value).length
+  // Use Number() to safely convert contract_value regardless of whether Supabase
+  // returns a numeric column as a JS number or as a string.
+  const totalContractValue = wonProposals.reduce(
+    (sum, p) => sum + Number(p.contract_value ?? 0),
+    0,
+  );
+  // Average across ALL won proposals (not just those with a value set), so the
+  // denominator matches the win count shown in the header.
+  const avgContractValue = wonProposals.length > 0 && totalContractValue > 0
+    ? totalContractValue / wonProposals.length
     : null;
 
   // ─── Win rate by study type ───────────────────────────────────────────────
