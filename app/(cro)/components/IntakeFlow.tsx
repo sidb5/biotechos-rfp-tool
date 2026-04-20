@@ -81,9 +81,12 @@ function StepIndicator({ activeStep }: { activeStep: number }) {
 
 interface IntakeFlowProps {
   croProfileId: string;
+  /** When set, overrides the AI's request_type classification so the user's
+   *  explicit button choice (+ Quote vs + RFP Bid) always wins. */
+  forcedMode?: 'quick_quote' | 'formal_rfp';
 }
 
-export default function IntakeFlow({ croProfileId }: IntakeFlowProps) {
+export default function IntakeFlow({ croProfileId, forcedMode }: IntakeFlowProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [flowState, setFlowState] = useState<FlowState>('input');
@@ -206,11 +209,19 @@ export default function IntakeFlow({ croProfileId }: IntakeFlowProps) {
       setFlowState('error');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [croProfileId]);
+  }, [croProfileId, forcedMode]);
 
   async function createAndNavigate(result: AnalyzeResult, rawText: string) {
     setFlowState('creating');
     try {
+      // User's button choice always wins over AI classification.
+      // + Quote → informal_request (quick_quote mode)
+      // + RFP Bid → formal_rfp (full_proposal mode)
+      const effectiveRequestType =
+        forcedMode === 'quick_quote' ? 'informal_request' :
+        forcedMode === 'formal_rfp'  ? 'formal_rfp' :
+        result.request_type;
+
       const res = await fetch('/api/intake/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -218,7 +229,7 @@ export default function IntakeFlow({ croProfileId }: IntakeFlowProps) {
           cro_profile_id: croProfileId,
           raw_text: rawText,
           parsed_summary: {
-            request_type:        result.request_type,
+            request_type:        effectiveRequestType,
             biotech_name:        result.biotech_name,
             study_type:          result.study_type,
             assay_types:         result.assay_types,

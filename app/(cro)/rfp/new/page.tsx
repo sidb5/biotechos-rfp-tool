@@ -23,7 +23,7 @@ export default async function NewRFPPage({
     redirect('/profile');
   }
 
-  const mode = searchParams.mode;
+  const mode = searchParams.mode as 'quick_quote' | 'formal_rfp' | undefined;
   const title =
     mode === 'formal_rfp'   ? 'New RFP Response' :
     mode === 'quick_quote'  ? 'New Quote' :
@@ -31,7 +31,7 @@ export default async function NewRFPPage({
 
   return (
     <AppShell title={title} navInLayout>
-      <IntakeFlow croProfileId={profile.id} />
+      <IntakeFlow croProfileId={profile.id} forcedMode={mode} />
     </AppShell>
   );
 }
