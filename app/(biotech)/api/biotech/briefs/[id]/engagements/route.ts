@@ -88,11 +88,12 @@ export async function POST(
   try {
     const { data: settings } = await supabase
       .from('biotech_user_settings')
-      .select('sender_display_name, sender_email')
+      .select('company_name, sender_display_name, sender_email')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (settings?.sender_display_name) senderDisplayName = settings.sender_display_name;
+    if (settings?.company_name)        senderDisplayName  = settings.company_name;
+    else if (settings?.sender_display_name) senderDisplayName = settings.sender_display_name;
     if (settings?.sender_email)        senderEmail        = settings.sender_email;
   } catch {
     // Table not yet migrated — use auth defaults

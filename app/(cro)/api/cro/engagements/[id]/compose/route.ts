@@ -61,9 +61,9 @@ export async function POST(
       .select('company_name, sender_display_name, sender_email')
       .eq('user_id', user.id)
       .maybeSingle();
-    if (profile?.sender_display_name) senderDisplayName = profile.sender_display_name;
+    if (profile?.company_name)        senderDisplayName  = profile.company_name;
+    else if (profile?.sender_display_name) senderDisplayName = profile.sender_display_name;
     if (profile?.sender_email)        senderEmail        = profile.sender_email;
-    else if (profile?.company_name)   senderDisplayName  = profile.company_name;
   } catch { /* use auth defaults */ }
 
   const adminSupabase = createClient(

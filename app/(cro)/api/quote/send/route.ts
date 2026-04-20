@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   });
 
   const finalSubject = customSubject?.trim() || defaultSubject;
-  const senderName = profile.sender_display_name ?? profile.company_name ?? 'CRO Proposal Engine';
+  const senderName = profile.company_name ?? profile.sender_display_name ?? 'CRO Proposal Engine';
   const verifiedFrom = process.env.BIOTECH_OUTREACH_EMAIL ?? 'onboarding@resend.dev';
   const fromField = `${senderName} via BiotechOS <${verifiedFrom}>`;
 

@@ -186,7 +186,7 @@ export async function POST(
     .maybeSingle();
 
   const companyName      = settings?.company_name        ?? '[Company Name]';
-  const senderDisplay    = settings?.sender_display_name ?? (user.user_metadata?.full_name as string) ?? user.email!;
+  const senderDisplay    = settings?.company_name ?? settings?.sender_display_name ?? (user.user_metadata?.full_name as string) ?? user.email!;
   const senderReplyTo    = settings?.sender_email        ?? user.email!;
 
   // ── Load requested engagements ───────────────────────────────────────────
