@@ -225,23 +225,42 @@ export async function POST(req: NextRequest) {
       const persona   = engagement.brief_id ? 'biotech' : 'cro';
       const engUrl    = `${appUrl}/${persona}/engagements/${engagementId}`;
       const croName   = engagement.cro_name ?? 'CRO';
-      const bodyText  = text ?? html ?? '(no body)';
+      const rawBody   = text ?? html ?? '(no body)';
 
-      // HTML email: prominent CTA button at top, then forwarded plain-text body below
+      // Strip > quote-reply prefixes added by email clients, and markdown markers
+      const cleanedBody = rawBody
+        .split('\n')
+        .map(line => line.replace(/^>+\s?/, ''))   // remove leading > chars
+        .join('\n')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')          // strip **bold**
+        .replace(/\*([^*]+)\*/g, '$1')              // strip *italic*
+        .trim();
+
+      // Convert plain text to HTML paragraphs (no pre-wrap to avoid layout shifts)
+      const bodyHtml = cleanedBody
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .split(/\n{2,}/)
+        .filter(p => p.trim())
+        .map(p => `<p style="margin:0 0 0.8em 0;font-size:14px;color:#333">${p.replace(/\n/g, '<br>')}</p>`)
+        .join('');
+
+      // HTML email: prominent CTA button at top, then forwarded body below
       const forwardHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px">
 
-  <div style="margin-bottom:24px;padding:16px;background:#f0f7ff;border-radius:8px;border:1px solid #c0d8f0;text-align:center">
+  <div style="margin-bottom:24px;padding:16px 20px;background:#f0f7ff;border-radius:8px;border:1px solid #c0d8f0;text-align:center">
     <p style="margin:0 0 12px 0;font-size:15px;font-weight:600;color:#1a1a1a">
       ${croName} replied to your enquiry
     </p>
     <a href="${engUrl}"
        style="display:inline-block;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
-      View Engagement &amp; Draft Reply →
+      View Engagement &amp; Draft Reply &#8594;
     </a>
-    <p style="margin:10px 0 0 0;font-size:12px;color:#666">
-      Or copy this link: ${engUrl}
+    <p style="margin:10px 0 0 0;font-size:11px;color:#888;word-break:break-all">
+      <a href="${engUrl}" style="color:#888">${engUrl}</a>
     </p>
   </div>
 
@@ -249,10 +268,7 @@ export async function POST(req: NextRequest) {
     <strong>Forwarded from:</strong> ${from}
   </p>
   <hr style="border:none;border-top:1px solid #ddd;margin:12px 0">
-  <div style="white-space:pre-wrap;font-size:14px">${bodyText
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')}</div>
+  <div>${bodyHtml || '<p style="color:#999;font-size:13px">(no body)</p>'}</div>
   <hr style="border:none;border-top:1px solid #ddd;margin:16px 0">
   <p style="margin:0;font-size:12px;color:#999">Managed by BiotechOS.</p>
 
