@@ -14,7 +14,12 @@ export interface SendEmailOptions {
 
 export async function sendEmail(opts: SendEmailOptions): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'CRO Proposal Engine <notifications@cro-rfp-tool.com>';
+  // Prefer explicit EMAIL_FROM, then fall back to the verified outreach domain
+  // that we already use for outbound biotech/CRO emails. Avoids needing to verify
+  // a separate notifications domain just for transactional messages.
+  const outreach = process.env.BIOTECH_OUTREACH_EMAIL;
+  const from = process.env.EMAIL_FROM
+    ?? (outreach ? `BiotechOS <${outreach}>` : 'onboarding@resend.dev');
 
   // Supabase admin client for logging (uses service role — bypasses RLS)
   const supabase = createClient(

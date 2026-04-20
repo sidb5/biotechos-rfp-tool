@@ -94,7 +94,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
   const [userInitial, setUserInitial] = useState('U');
   const [userEmail, setUserEmail]     = useState('');
 
-  // Unread notification count — refreshes every 30 s
+  // Unread notification count — refreshes every 10 s and on tab focus
   const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
     async function fetchUnread() {
@@ -105,8 +105,15 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
       setUnreadCount(count ?? 0);
     }
     void fetchUnread();
-    const interval = setInterval(() => { void fetchUnread(); }, 30_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => { void fetchUnread(); }, 10_000);
+    const onFocus  = () => { void fetchUnread(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, []);
 
   // Fetch user email for profile pill
