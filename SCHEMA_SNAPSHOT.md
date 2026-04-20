@@ -152,6 +152,7 @@ share_enabled         boolean
 share_views           integer
 share_first_viewed_at timestamptz
 share_last_viewed_at  timestamptz
+engagement_id         uuid        nullable  FK → cro_engagements.id (set null on delete) — set when quote is emailed; links the proposal to its reply thread
 created_at            timestamptz
 updated_at            timestamptz
 ```

@@ -7,6 +7,7 @@ import AppShell from '@shared/components/AppShell';
 
 interface PendingItem {
   engagementId: string;
+  proposalId:   string | null;  // set when this engagement came from a quote send
   biotechName:  string;
   biotechEmail: string;
   draftId:      string;
@@ -97,6 +98,18 @@ export default function ActionsNeededPage() {
 
       const engMap = new Map(engagements.map(e => [e.id, e]));
 
+      // Look up any proposals linked to these engagements so we can route
+      // directly to /quote/{id} instead of /engagements/{id} for quote threads.
+      const { data: linkedProposals } = await supabase
+        .from('proposals')
+        .select('id, engagement_id')
+        .in('engagement_id', pendingEngagementIds);
+
+      const proposalByEngId = new Map<string, string>();
+      for (const p of linkedProposals ?? []) {
+        if (p.engagement_id) proposalByEngId.set(p.engagement_id, p.id);
+      }
+
       const result: PendingItem[] = [];
       for (const engagementId of pendingEngagementIds) {
         const eng   = engMap.get(engagementId);
@@ -105,6 +118,7 @@ export default function ActionsNeededPage() {
         const inbound = inboundMap.get(engagementId);
         result.push({
           engagementId,
+          proposalId:   proposalByEngId.get(engagementId) ?? null,
           biotechName:  eng.cro_name,
           biotechEmail: eng.cro_email,
           draftId:      draft.id,
@@ -161,7 +175,15 @@ export default function ActionsNeededPage() {
             {items.map(item => (
               <div
                 key={item.engagementId}
-                onClick={() => router.push(`/engagements/${item.engagementId}`)}
+                onClick={() =>
+                  // Route to the quote page when this engagement was created from a
+                  // quote send — the quote page already shows the full thread + AI
+                  // draft approval. Fall back to the standalone engagement page for
+                  // engagements created via the paste/new flow (no linked proposal).
+                  router.push(item.proposalId
+                    ? `/quote/${item.proposalId}`
+                    : `/engagements/${item.engagementId}`)
+                }
                 className="cursor-pointer rounded-xl border border-green-100 bg-white shadow-sm hover:border-green-300 hover:shadow-md transition-all overflow-hidden"
               >
                 {/* Header row */}

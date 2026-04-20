@@ -81,25 +81,40 @@ export default async function DashboardPage() {
   const engagementIds = (pendingEngDrafts ?? []).map(e => e.id);
   let engDraftItems: AttentionItem[] = [];
   if (engagementIds.length > 0) {
-    const { data: draftMsgs } = await supabase
-      .from('engagement_messages')
-      .select('id, engagement_id, created_at')
-      .in('engagement_id', engagementIds)
-      .eq('direction', 'outbound')
-      .eq('ai_generated', true)
-      .eq('status', 'draft')
-      .order('created_at', { ascending: false });
+    const [{ data: draftMsgs }, { data: linkedProposals }] = await Promise.all([
+      supabase
+        .from('engagement_messages')
+        .select('id, engagement_id, created_at')
+        .in('engagement_id', engagementIds)
+        .eq('direction', 'outbound')
+        .eq('ai_generated', true)
+        .eq('status', 'draft')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('proposals')
+        .select('id, engagement_id')
+        .in('engagement_id', engagementIds),
+    ]);
+
+    // Map engagement_id → proposal_id for quote-originated threads
+    const proposalByEngId = new Map<string, string>();
+    for (const p of linkedProposals ?? []) {
+      if (p.engagement_id) proposalByEngId.set(p.engagement_id, p.id);
+    }
 
     const seen = new Set<string>();
     for (const msg of draftMsgs ?? []) {
       if (seen.has(msg.engagement_id)) continue;
       seen.add(msg.engagement_id);
       const eng = (pendingEngDrafts ?? []).find(e => e.id === msg.engagement_id);
+      const proposalId = proposalByEngId.get(msg.engagement_id);
       engDraftItems.push({
         key: `engdraft-${msg.engagement_id}`,
         label: `Reply received from ${eng?.cro_name ?? 'client'} — AI draft ready for review`,
         actionLabel: 'Review & send →',
-        actionHref: `/engagements/${msg.engagement_id}`,
+        // Route to /quote/{id} for quote threads (where the full context lives),
+        // fall back to /engagements/{id} for paste-flow engagements
+        actionHref: proposalId ? `/quote/${proposalId}` : `/engagements/${msg.engagement_id}`,
       });
     }
   }

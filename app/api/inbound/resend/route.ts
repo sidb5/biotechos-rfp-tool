@@ -221,9 +221,11 @@ export async function POST(req: NextRequest) {
 
       const appUrl    = process.env.NEXT_PUBLIC_APP_URL
         ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-      // Route to the correct persona's engagements page
-      const persona   = engagement.brief_id ? 'biotech' : 'cro';
-      const engUrl    = `${appUrl}/${persona}/engagements/${engagementId}`;
+      // Route to the correct persona's engagements page.
+      // CRO path has no prefix; biotech path has /biotech prefix.
+      const engUrl    = engagement.brief_id
+        ? `${appUrl}/biotech/engagements/${engagementId}`
+        : `${appUrl}/engagements/${engagementId}`;
       const croName   = engagement.cro_name ?? 'CRO';
       const rawBody   = text ?? html ?? '(no body)';
 
@@ -246,39 +248,61 @@ export async function POST(req: NextRequest) {
         .map(p => `<p style="margin:0 0 0.8em 0;font-size:14px;color:#333">${p.replace(/\n/g, '<br>')}</p>`)
         .join('');
 
-      // HTML email: prominent CTA button at top, then forwarded body below
+      // HTML email: prominent CTA button at top, then forwarded body below.
+      // Use a table wrapper (not body margin:auto) so Gmail renders it centred.
       const forwardHtml = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 16px;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;max-width:560px;width:100%;">
 
-  <div style="margin-bottom:24px;padding:16px 20px;background:#f0f7ff;border-radius:8px;border:1px solid #c0d8f0;text-align:center">
-    <p style="margin:0 0 12px 0;font-size:15px;font-weight:600;color:#1a1a1a">
-      ${croName} replied to your enquiry
-    </p>
-    <a href="${engUrl}"
-       style="display:inline-block;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
-      View Engagement &amp; Draft Reply &#8594;
-    </a>
-    <p style="margin:10px 0 0 0;font-size:11px;color:#888;word-break:break-all">
-      <a href="${engUrl}" style="color:#888">${engUrl}</a>
-    </p>
-  </div>
+      <!-- CTA header -->
+      <tr><td style="padding:24px 28px;background:#eff6ff;border-bottom:1px solid #dbeafe;text-align:center">
+        <p style="margin:0 0 14px 0;font-size:15px;font-weight:600;color:#1e3a5f">
+          ${croName} replied to your enquiry
+        </p>
+        <a href="${engUrl}"
+           style="display:inline-block;padding:11px 26px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
+          View Engagement &amp; Draft Reply &#8594;
+        </a>
+        <p style="margin:10px 0 0 0;font-size:11px;color:#93a3bb;word-break:break-all">
+          <a href="${engUrl}" style="color:#93a3bb">${engUrl}</a>
+        </p>
+      </td></tr>
 
-  <p style="margin:0 0 8px 0;color:#555;font-size:13px">
-    <strong>Forwarded from:</strong> ${from}
-  </p>
-  <hr style="border:none;border-top:1px solid #ddd;margin:12px 0">
-  <div>${bodyHtml || '<p style="color:#999;font-size:13px">(no body)</p>'}</div>
-  <hr style="border:none;border-top:1px solid #ddd;margin:16px 0">
-  <p style="margin:0;font-size:12px;color:#999">Managed by BiotechOS.</p>
+      <!-- Forwarded message body -->
+      <tr><td style="padding:20px 28px">
+        <p style="margin:0 0 10px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em">
+          Forwarded message
+        </p>
+        <p style="margin:0 0 12px 0;color:#555;font-size:13px">
+          <strong>From:</strong> ${from}
+        </p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0">
+        <div style="font-size:14px;line-height:1.6;color:#374151">
+          ${bodyHtml || '<p style="color:#9ca3af;font-size:13px">(no body)</p>'}
+        </div>
+      </td></tr>
 
+      <!-- Footer -->
+      <tr><td style="padding:14px 28px;border-top:1px solid #f3f4f6">
+        <p style="margin:0;font-size:11px;color:#9ca3af">Managed by BiotechOS.</p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
 </body></html>`;
 
       const { sendEmail } = await import('@shared/lib/email');
+      // Use the counterparty's name in the FROM so the CRO can see at a glance
+      // who replied (e.g. "Veridian Therapeutics (via BiotechOS)").
       await sendEmail({
         to:           userEmail,
         subject:      `[Fwd] ${subject ?? 'Reply from ' + from}`,
         html:         forwardHtml,
+        fromName:     `${croName} (via BiotechOS)`,
         templateName: 'inbound_forward',
         userId:       engagement.user_id,
       });

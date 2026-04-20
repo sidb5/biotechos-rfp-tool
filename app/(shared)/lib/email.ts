@@ -12,6 +12,8 @@ export interface SendEmailOptions {
   text?: string;
   templateName: string;
   userId?: string;
+  /** Override the display name in the FROM field (default: "BiotechOS") */
+  fromName?: string;
 }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<{ ok: boolean; error?: string }> {
@@ -20,8 +22,9 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ ok: boolean; 
   // that we already use for outbound biotech/CRO emails. Avoids needing to verify
   // a separate notifications domain just for transactional messages.
   const outreach = process.env.BIOTECH_OUTREACH_EMAIL;
+  const displayName = opts.fromName ?? 'BiotechOS';
   const from = process.env.EMAIL_FROM
-    ?? (outreach ? `BiotechOS <${outreach}>` : 'onboarding@resend.dev');
+    ?? (outreach ? `${displayName} <${outreach}>` : 'onboarding@resend.dev');
 
   // Supabase admin client for logging (uses service role — bypasses RLS)
   const supabase = createClient(

@@ -108,7 +108,9 @@ export async function POST(request: Request) {
       engagementId = newEng.id;
       // resolveReplyTo returns the inbound address when RESEND_INBOUND_DOMAIN is
       // set, otherwise falls back to the user's email (native-mode behaviour).
-      replyTo = await resolveReplyTo(newEng.id, user.email!, adminSupabase);
+      // Pass the CRO company name so recipients see "Apex Inc via BiotechOS"
+      // instead of "BiotechOS Replies" in the To: field when they reply.
+      replyTo = await resolveReplyTo(newEng.id, user.email!, adminSupabase, croCompanyName);
       // Persist the link so the quote page can always find the conversation.
       await supabase
         .from('proposals')

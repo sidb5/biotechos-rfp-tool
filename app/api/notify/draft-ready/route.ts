@@ -89,25 +89,46 @@ export async function POST(req: NextRequest) {
 
       const subject = `A response from ${counterpartyLabel} is ready for your review`;
 
-      const html = `
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px">
-  <h2 style="margin:0 0 0.5em 0;font-size:18px;color:#111">
-    Reply from ${counterpartyLabel}
-  </h2>
-  <p style="margin:0 0 1em 0;color:#555">
-    An AI-generated response draft is waiting for your review. Click the link below to approve, edit, or dismiss it.
-  </p>
-  <p style="margin:1.5em 0">
-    <a href="${engUrl}"
-       style="background:#2563eb;color:#fff;padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
-      Review &amp; approve draft →
-    </a>
-  </p>
-  <p style="font-size:11px;color:#9ca3af;margin:2em 0 0 0">
-    Managed by BiotechOS · <a href="${engUrl}" style="color:#6366f1;text-decoration:none;">View engagement</a>
-  </p>
+      // Use table-wrapper layout so Gmail renders it centred (body margin:auto is stripped)
+      const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 16px;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;max-width:560px;width:100%;">
+
+      <!-- Header bar -->
+      <tr><td style="background:#16a34a;padding:16px 28px;">
+        <p style="margin:0;color:#ffffff;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;">BiotechOS</p>
+      </td></tr>
+
+      <!-- Body -->
+      <tr><td style="padding:28px">
+        <h2 style="margin:0 0 10px 0;font-size:18px;font-weight:700;color:#111827">
+          Reply from ${counterpartyLabel}
+        </h2>
+        <p style="margin:0 0 20px 0;font-size:14px;color:#4b5563;line-height:1.6">
+          An AI-generated response draft is waiting for your review. Click below to approve, edit, or dismiss it.
+        </p>
+        <a href="${engUrl}"
+           style="display:inline-block;padding:12px 24px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
+          Review &amp; approve draft &#8594;
+        </a>
+        <p style="margin:14px 0 0 0;font-size:12px;color:#9ca3af;word-break:break-all">
+          <a href="${engUrl}" style="color:#9ca3af">${engUrl}</a>
+        </p>
+      </td></tr>
+
+      <!-- Footer -->
+      <tr><td style="padding:14px 28px;border-top:1px solid #f3f4f6">
+        <p style="margin:0;font-size:11px;color:#9ca3af">
+          Managed by BiotechOS &middot; <a href="${engUrl}" style="color:#9ca3af;text-decoration:none">View engagement</a>
+        </p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
 </body></html>`;
 
       await sendEmail({
