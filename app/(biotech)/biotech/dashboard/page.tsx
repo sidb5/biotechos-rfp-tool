@@ -94,12 +94,22 @@ export default function BiotechDashboard() {
         return;
       }
 
-      // Derive display name from metadata or email
+      // Derive display name: auth metadata → biotech_user_settings → email prefix
       const meta = user.user_metadata;
-      const name =
-        meta?.full_name ||
-        meta?.name ||
-        (user.email?.split('@')[0] ?? '');
+      let name: string = meta?.full_name || meta?.name || '';
+      if (!name) {
+        const { data: settings } = await supabase
+          .from('biotech_user_settings')
+          .select('sender_display_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        name = settings?.sender_display_name || '';
+      }
+      if (!name) {
+        // Last resort: strip email domain, capitalise first letter
+        const prefix = user.email?.split('@')[0] ?? '';
+        name = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+      }
       setUserName(name);
 
       // Load briefs + recent engagements in parallel
