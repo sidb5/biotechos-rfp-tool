@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@shared/lib/supabase';
 import VerifyBusiness from '@shared/components/VerifyBusiness';
 import { checkCorporateEmail } from '@shared/lib/email-domain';
+import OAuthButtons from '@shared/components/OAuthButtons';
 
 type Step = 'persona' | 'signup' | 'verify';
 type UserType = 'cro' | 'biotech';
@@ -433,6 +434,8 @@ function SignupPageInner() {
             {loading ? 'Creating account…' : 'Create account'}
           </button>
         </form>
+
+        <OAuthButtons userType={userType ?? 'cro'} mode="signup" />
 
         <p className="mt-6 text-sm text-center text-gray-500">
           Already have an account?{' '}

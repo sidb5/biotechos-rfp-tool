@@ -6,33 +6,46 @@ import { checkCorporateEmail }        from '@shared/lib/email-domain';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const code     = searchParams.get('code');
+  const next     = searchParams.get('next') ?? '/dashboard';
+  // `type` is passed via redirectTo when the user clicks an OAuth button so we
+  // know which persona they selected (cro | biotech). Used to:
+  //   1. Set user_type metadata on brand-new OAuth accounts.
+  //   2. Route correctly when `next` is not in the URL (shouldn't happen but safe fallback).
+  const typeParam = searchParams.get('type') as 'cro' | 'biotech' | null;
 
   if (code) {
     const supabase = createSupabaseServerClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error && data.session) {
-      // Corporate-domain gate (Task 13) — enforce server-side for OAuth flows
+      // ── Corporate-domain gate — enforced server-side for ALL OAuth flows ──
       const user = data.session.user;
       const domainCheck = checkCorporateEmail(user.email ?? '');
       if (!domainCheck.ok) {
-        // Sign the user back out — they shouldn't have an active session
         await supabase.auth.signOut();
         const msg = encodeURIComponent(domainCheck.message ?? 'Work email required');
         return NextResponse.redirect(`${origin}/auth/error?error=${msg}`);
       }
 
-      // Send welcome email for brand-new accounts (created within last 10 min)
+      // ── New account handling ───────────────────────────────────────────────
       const createdAt = user.created_at;
       const isNew = createdAt && Date.now() - new Date(createdAt).getTime() < 10 * 60 * 1000;
+
       if (isNew) {
-        const prefix = (user.email ?? '').split('@')[0];
-        const firstName = prefix.split(/[._+-]/)[0];
-        const name = firstName.length >= 2
-          ? firstName.charAt(0).toUpperCase() + firstName.slice(1)
+        // For OAuth signups, user_type isn't set by the provider — set it now
+        // using the persona the user selected before clicking Google/Microsoft.
+        if (typeParam && !user.user_metadata?.user_type) {
+          await supabase.auth.updateUser({ data: { user_type: typeParam } });
+        }
+
+        // Welcome email — use provider-supplied full_name if available
+        const metaName  = user.user_metadata?.full_name as string | undefined;
+        const prefix    = (user.email ?? '').split('@')[0];
+        const firstWord = (metaName ?? prefix).split(/[\s._+-]/)[0];
+        const firstName = firstWord.length >= 2
+          ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1)
           : undefined;
-        const { subject, html } = welcomeTemplate({ firstName: name });
+        const { subject, html } = welcomeTemplate({ firstName });
         sendEmail({
           to: user.email!,
           subject,
@@ -42,14 +55,15 @@ export async function GET(request: Request) {
         }).catch(console.error);
       }
 
-      // Route to the correct dashboard based on user type set at signup.
-      // The `next` param from the URL takes precedence if explicitly set.
-      // Otherwise fall back to the type-appropriate default.
+      // ── Routing ───────────────────────────────────────────────────────────
+      // `next` is always set when coming from an OAuth button (we put it in
+      // redirectTo). Fall back to metadata / typeParam for edge cases.
       const hasExplicitNext = searchParams.has('next');
       let destination = next;
       if (!hasExplicitNext) {
-        const userType = user.user_metadata?.user_type ?? 'cro';
-        destination = userType === 'biotech' ? '/biotech/dashboard' : '/dashboard';
+        const resolvedType =
+          (user.user_metadata?.user_type as string | undefined) ?? typeParam ?? 'cro';
+        destination = resolvedType === 'biotech' ? '/biotech/dashboard' : '/dashboard';
       }
 
       return NextResponse.redirect(`${origin}${destination}`);

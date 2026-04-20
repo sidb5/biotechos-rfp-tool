@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@shared/lib/supabase';
 import { checkCorporateEmail } from '@shared/lib/email-domain';
+import OAuthButtons from '@shared/components/OAuthButtons';
 
 type Step = 'persona' | 'login';
 type UserType = 'cro' | 'biotech';
@@ -314,6 +315,8 @@ function LoginPageInner() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        <OAuthButtons userType={userType ?? 'cro'} mode="signin" />
 
         <p className="mt-6 text-sm text-center text-gray-500">
           No account?{' '}
