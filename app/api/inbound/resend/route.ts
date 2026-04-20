@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: 'invalid_json' });
   }
 
-  // Debug: log full payload keys so we can see what Resend actually sends
+  // Debug: log full payload so we can see exactly what Resend sends
+  console.log('[inbound] FULL PAYLOAD:', JSON.stringify(rawBody, null, 2).slice(0, 3000));
   console.log('[inbound] raw envelope keys:', Object.keys(rawBody));
   console.log('[inbound] data keys:', Object.keys(payload as unknown as Record<string, unknown>));
   console.log('[inbound] has text?', !!(payload as ResendInboundPayload).text, 'has html?', !!(payload as ResendInboundPayload).html);
