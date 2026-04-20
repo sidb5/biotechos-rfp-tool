@@ -167,7 +167,7 @@ export default function BiotechDashboard() {
               BiotechOS — CRO Engagement Pipeline
             </p>
             <h1 className="text-3xl font-bold text-gray-900">
-              {userName ? `Welcome back, ${userName.split(' ')[0]}` : 'Dashboard'}
+              {userName ? `Welcome back, ${userName}` : 'Dashboard'}
             </h1>
             <p className="mt-1.5 text-sm text-gray-500">
               Find, brief, and engage CROs — without exposing your IP.
