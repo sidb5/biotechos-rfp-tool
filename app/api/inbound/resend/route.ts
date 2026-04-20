@@ -212,32 +212,32 @@ export async function POST(req: NextRequest) {
       const userEmail = userData?.user?.email;
       if (!userEmail) return;
 
-      const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+      const appUrl    = process.env.NEXT_PUBLIC_APP_URL
+        ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
       const engUrl    = `${appUrl}/biotech/engagements/${engagementId}`;
       const croName   = engagement.cro_name ?? 'CRO';
       const bodyText  = text ?? html ?? '(no body)';
 
-      const forwardHtml = `
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px">
-  <p style="margin:0 0 1em 0;color:#555;font-size:12px;">
-    <strong>Forwarded by BiotechOS</strong> — reply from ${from} for engagement with ${croName}
-  </p>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 1.5em 0">
-  <div style="white-space:pre-wrap">${bodyText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:1.5em 0 1em 0">
-  <p style="margin:0;font-size:11px;color:#9ca3af;">
-    Managed by BiotechOS ·
-    <a href="${engUrl}" style="color:#6366f1;text-decoration:none;">View engagement &amp; draft reply →</a>
-  </p>
-</body></html>`;
+      // Plain text forward — avoids spam filters and looks like a real email
+      const forwardText = [
+        `Forwarded from ${from} — engagement with ${croName}.`,
+        ``,
+        `—————————————`,
+        ``,
+        bodyText,
+        ``,
+        `—————————————`,
+        ``,
+        `View engagement and draft reply: ${engUrl}`,
+        ``,
+        `Managed by BiotechOS.`,
+      ].join('\n');
 
       const { sendEmail } = await import('@shared/lib/email');
       await sendEmail({
         to:           userEmail,
         subject:      `[Fwd] ${subject ?? 'Reply from ' + from}`,
-        html:         forwardHtml,
+        text:         forwardText,
         templateName: 'inbound_forward',
         userId:       engagement.user_id,
       });

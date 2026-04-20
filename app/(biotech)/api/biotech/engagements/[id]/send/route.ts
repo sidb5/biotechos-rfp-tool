@@ -99,7 +99,7 @@ export async function POST(
       replyTo: replyToAddress,
       to:      engagement.cro_email,
       subject,
-      html:    textToHtml(msgBody),
+      text:    msgBody, // plain text — feels human, avoids spam filters
     });
 
     if (sendError) throw new Error(sendError.message);

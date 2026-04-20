@@ -7,7 +7,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export interface SendEmailOptions {
   to: string;
   subject: string;
-  html: string;
+  /** Prefer `text` for human-readable emails — HTML trips spam filters */
+  html?: string;
+  text?: string;
   templateName: string;
   userId?: string;
 }
@@ -45,12 +47,17 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ ok: boolean; 
     const { Resend } = await import('resend');
     const resend = new Resend(apiKey);
 
-    const { error } = await resend.emails.send({
-      from,
-      to: opts.to,
-      subject: opts.subject,
-      html: opts.html,
-    });
+    // Resend requires at least one of html/text. Prefer text when provided.
+    const emailPayload: {
+      from: string; to: string; subject: string; html?: string; text?: string;
+    } = { from, to: opts.to, subject: opts.subject };
+    if (opts.text) emailPayload.text = opts.text;
+    if (opts.html) emailPayload.html = opts.html;
+    if (!opts.text && !opts.html) {
+      emailPayload.text = '(no content)';
+    }
+
+    const { error } = await resend.emails.send(emailPayload);
 
     if (error) throw new Error(error.message);
 

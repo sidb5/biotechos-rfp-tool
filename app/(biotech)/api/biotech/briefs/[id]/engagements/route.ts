@@ -135,7 +135,7 @@ export async function POST(
       replyTo: replyToAddress,
       to:      cro_email,
       subject,
-      html:    textToHtml(messageBody),
+      text:    messageBody, // plain text — feels human, avoids spam filters
     });
 
     if (sendError) throw new Error(sendError.message);
