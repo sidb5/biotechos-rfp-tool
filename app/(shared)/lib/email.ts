@@ -47,17 +47,22 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ ok: boolean; 
     const { Resend } = await import('resend');
     const resend = new Resend(apiKey);
 
-    // Resend requires at least one of html/text. Prefer text when provided.
-    const emailPayload: {
-      from: string; to: string; subject: string; html?: string; text?: string;
-    } = { from, to: opts.to, subject: opts.subject };
+    // Resend requires at least one of html/text/template (discriminated union).
+    // Build the payload loosely, then cast — at least one body field is
+    // guaranteed to be set by the fallback below.
+    const emailPayload: Record<string, unknown> = {
+      from,
+      to:      opts.to,
+      subject: opts.subject,
+    };
     if (opts.text) emailPayload.text = opts.text;
     if (opts.html) emailPayload.html = opts.html;
     if (!opts.text && !opts.html) {
       emailPayload.text = '(no content)';
     }
 
-    const { error } = await resend.emails.send(emailPayload);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await resend.emails.send(emailPayload as any);
 
     if (error) throw new Error(error.message);
 
