@@ -25,7 +25,7 @@ export default async function QuotesPage() {
 
   const { data: proposals } = await supabase
     .from('proposals')
-    .select('id, status, created_at, quote_data, rfps(biotech_name, parsed_summary)')
+    .select('id, status, outcome, created_at, quote_data, rfps(biotech_name, parsed_summary)')
     .eq('cro_id', profile.id)
     .order('created_at', { ascending: false });
 
@@ -37,11 +37,6 @@ export default async function QuotesPage() {
     // Quick quote = not a formal RFP
     return rfpData?.parsed_summary?.request_type !== 'formal_rfp' && mode !== 'full_proposal';
   });
-
-  const statusColors: Record<string, string> = {
-    draft:    'bg-amber-50 text-amber-600',
-    complete: 'bg-green-50 text-green-700',
-  };
 
   return (
     <AppShell title="Quotes" navInLayout>
@@ -72,7 +67,21 @@ export default async function QuotesPage() {
                 parsed_summary?: { assay_types?: string[] };
               } | null;
               const assays = rfpData?.parsed_summary?.assay_types ?? [];
-              const statusColor = statusColors[p.status ?? ''] ?? 'bg-gray-100 text-gray-500';
+
+              // Outcome overrides status — matches dashboard pill logic
+              const outcome = (p as Record<string, unknown>).outcome as string | null | undefined;
+              const { label: pillLabel, cls: pillCls } = outcome
+                ? ({
+                    won:         { label: 'Won',         cls: 'bg-green-50 text-green-700'   },
+                    lost:        { label: 'Lost',         cls: 'bg-red-50 text-red-600'       },
+                    no_decision: { label: 'No decision',  cls: 'bg-gray-100 text-gray-500'    },
+                    withdrawn:   { label: 'Withdrawn',    cls: 'bg-gray-100 text-gray-500'    },
+                    pending:     { label: 'Pending',      cls: 'bg-yellow-50 text-yellow-700' },
+                  }[outcome] ?? { label: outcome, cls: 'bg-gray-100 text-gray-500' })
+                : p.status === 'complete'
+                  ? { label: 'Sent',  cls: 'bg-blue-50 text-blue-700'  }
+                  : { label: 'Draft', cls: 'bg-gray-100 text-gray-500' };
+
               return (
                 <li key={p.id} className="flex items-center">
                   <a
@@ -84,8 +93,8 @@ export default async function QuotesPage() {
                         {rfpData?.biotech_name ?? 'Unknown client'}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${statusColor}`}>
-                          {p.status === 'complete' ? 'Sent' : 'Draft'}
+                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${pillCls}`}>
+                          {pillLabel}
                         </span>
                         {assays.length > 0 && (
                           <span className="truncate max-w-[200px]">{assays.slice(0, 2).join(', ')}{assays.length > 2 ? ` +${assays.length - 2}` : ''}</span>
