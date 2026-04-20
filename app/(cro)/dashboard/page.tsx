@@ -295,40 +295,33 @@ export default async function DashboardPage() {
             )}
           </section>
 
-          {/* 3. Action Needed */}
+          {/* 3. Your Radar — mix of blocking AI draft approvals + advisory sales signals */}
           <section className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">Action Needed</h2>
-              {/* "View all" only links to /actions-needed when there are AI drafts —
-                  that page exclusively shows AI draft approvals, not sales signals */}
+              <h2 className="text-sm font-semibold text-gray-900">Your Radar</h2>
+              {/* "View all" only appears when AI drafts exist — /actions-needed shows
+                  AI draft approvals only, not the advisory signals */}
               {engDraftItems.length > 0 && (
                 <a href="/actions-needed" className="text-xs text-green-600 hover:text-green-700 font-medium">View all →</a>
               )}
             </div>
             {topAttentionItems.length === 0 ? (
               <div className="px-5 py-10 text-center flex-1 flex items-center justify-center">
-                <p className="text-sm text-gray-400">Nothing needs attention right now.</p>
+                <p className="text-sm text-gray-400">Nothing on your radar right now.</p>
               </div>
             ) : (
               <ul className="divide-y divide-gray-50 flex-1">
-                {topAttentionItems.map(item => {
-                  const isAiDraft = item.key.startsWith('engdraft-');
-                  return (
-                    <li key={item.key} className="px-5 py-3.5">
-                      {/* Label distinguishes blocking (reply required) from advisory (heads up) */}
-                      <p className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${isAiDraft ? 'text-blue-500' : 'text-amber-500'}`}>
-                        {isAiDraft ? '● Reply required' : '○ Heads up'}
-                      </p>
-                      <p className="text-sm text-gray-700 leading-snug mb-1">{item.label}</p>
-                      <a
-                        href={item.actionHref}
-                        className="text-xs text-green-600 hover:text-green-700 font-medium"
-                      >
-                        {item.actionLabel}
-                      </a>
-                    </li>
-                  );
-                })}
+                {topAttentionItems.map(item => (
+                  <li key={item.key} className="px-5 py-3.5">
+                    <p className="text-sm text-gray-700 leading-snug mb-1">{item.label}</p>
+                    <a
+                      href={item.actionHref}
+                      className="text-xs text-green-600 hover:text-green-700 font-medium"
+                    >
+                      {item.actionLabel}
+                    </a>
+                  </li>
+                ))}
               </ul>
             )}
           </section>

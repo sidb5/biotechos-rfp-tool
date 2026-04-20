@@ -321,6 +321,7 @@ country                     text
 region                      text     values: US | EU | UK | APAC | CN
 phone                       text
 contact_email               text
+contact_name                text
 bd_key_contact              text
 linkedin                    text
 services_summary            text
@@ -334,6 +335,7 @@ reputation_positive         text
 reputation_negative         text
 services_full               text
 glp_certified               boolean  default false
+notes                       text
 specialties                 text[]
 size_category               text     values: small | mid | large
 -- Service capability booleans:
