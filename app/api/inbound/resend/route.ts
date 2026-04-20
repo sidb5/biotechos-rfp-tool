@@ -64,7 +64,8 @@ export async function POST(req: NextRequest) {
 
   const { from, to, subject, text, html } = payload;
   // Resend may send message_id (snake_case) or messageId (camelCase)
-  const messageId = payload.messageId ?? (payload as Record<string, unknown>).message_id as string | undefined;
+  const rawPayload = payload as unknown as Record<string, unknown>;
+  const messageId = (payload.messageId ?? rawPayload.message_id) as string | undefined;
 
   // ── Parse engagement address ──────────────────────────────────────────────
 
