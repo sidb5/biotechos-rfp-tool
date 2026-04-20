@@ -76,16 +76,52 @@ export default function BiotechNav() {
     async function fetchUnread() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { count } = await supabase
+
+      // Primary: unread notifications
+      const { count: notifCount, error: notifErr } = await supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('read', false);
-      setUnreadCount(count ?? 0);
+      if (notifErr) console.error('[BiotechNav] notifications query failed', notifErr);
+
+      // Fallback: directly count engagement messages that are pending AI drafts.
+      // This ensures the badge shows even if the notification pipeline had a hiccup.
+      const { data: engagements } = await supabase
+        .from('cro_engagements')
+        .select('id')
+        .eq('user_id', user.id);
+
+      let pendingDraftCount = 0;
+      if (engagements?.length) {
+        const engIds = engagements.map(e => e.id);
+        const { data: drafts } = await supabase
+          .from('engagement_messages')
+          .select('engagement_id')
+          .in('engagement_id', engIds)
+          .eq('direction', 'outbound')
+          .eq('ai_generated', true)
+          .eq('status', 'draft');
+
+        // Deduplicate: count distinct engagements with a pending draft
+        if (drafts?.length) {
+          pendingDraftCount = new Set(drafts.map(d => d.engagement_id)).size;
+        }
+      }
+
+      setUnreadCount(Math.max(notifCount ?? 0, pendingDraftCount));
     }
     void fetchUnread();
-    const interval = setInterval(() => { void fetchUnread(); }, 15_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => { void fetchUnread(); }, 10_000);
+    // Refresh immediately when user returns to the tab
+    const onFocus = () => { void fetchUnread(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, []);
 
   // When user lands on actions-needed, mark all their notifications read
