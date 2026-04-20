@@ -53,13 +53,18 @@ export async function POST(req: NextRequest) {
 
   let payload: ResendInboundPayload;
   try {
-    payload = await req.json() as ResendInboundPayload;
+    const body = await req.json() as Record<string, unknown>;
+    // Resend wraps webhook events: { type: "email.received", data: { from, to, ... } }
+    // Fall back to top-level if no data envelope (future-proofing)
+    payload = (body.data ?? body) as ResendInboundPayload;
   } catch {
     console.error('[inbound] Invalid JSON payload');
     return NextResponse.json({ ok: false, reason: 'invalid_json' });
   }
 
-  const { from, to, subject, text, html, messageId } = payload;
+  const { from, to, subject, text, html } = payload;
+  // Resend may send message_id (snake_case) or messageId (camelCase)
+  const messageId = payload.messageId ?? (payload as Record<string, unknown>).message_id as string | undefined;
 
   // ── Parse engagement address ──────────────────────────────────────────────
 
@@ -83,7 +88,7 @@ export async function POST(req: NextRequest) {
 
   const { data: engagement } = await adminSupabase
     .from('cro_engagements')
-    .select('id, user_id, capture_mode, stage, cro_name')
+    .select('id, user_id, stage, cro_name')
     .eq('id', engagementId)
     .maybeSingle();
 
@@ -100,9 +105,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, reason: 'engagement_not_found' });
   }
 
-  // Safety: only capture replies for assisted-mode engagements
-  if (engagement.capture_mode !== 'assisted') {
-    console.warn('[inbound] Reply arrived for native-mode engagement — ignoring', engagementId);
+  // Safety: only capture replies for assisted-mode users
+  // capture_mode lives in biotech_user_settings, not on the engagement row
+  const { data: userSettings } = await adminSupabase
+    .from('biotech_user_settings')
+    .select('capture_mode')
+    .eq('user_id', engagement.user_id)
+    .maybeSingle();
+
+  const captureMode = userSettings?.capture_mode ?? 'assisted';
+  if (captureMode !== 'assisted') {
+    console.warn('[inbound] Reply arrived for native-mode user — ignoring', engagementId);
     return NextResponse.json({ ok: true, reason: 'native_mode_skipped' });
   }
 
