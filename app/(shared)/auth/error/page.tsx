@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 interface Props {
-  searchParams: Promise<{ message?: string; type?: string }>
+  searchParams: Promise<{ error?: string; message?: string; type?: string }>
 }
 
 const ERROR_MESSAGES: Record<string, { title: string; body: string; action: string; href: string }> = {
@@ -27,7 +27,8 @@ const ERROR_MESSAGES: Record<string, { title: string; body: string; action: stri
 
 export default async function AuthErrorPage({ searchParams }: Props) {
   const params = await searchParams
-  const rawMessage = params.message ?? ''
+  // callback sends ?error=, magic-link handler sends ?message= — accept both
+  const rawMessage = params.error ?? params.message ?? ''
   const type = params.type ?? 'signup'
 
   // Map common Supabase error messages to user-friendly variants
