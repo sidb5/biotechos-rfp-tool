@@ -85,8 +85,9 @@ export default function BiotechNav() {
         .eq('read', false);
       if (notifErr) console.error('[BiotechNav] notifications query failed', notifErr);
 
-      // Fallback: directly count engagement messages that are pending AI drafts.
-      // This ensures the badge shows even if the notification pipeline had a hiccup.
+      // Fallback: directly count engagements where the MOST RECENT AI message
+      // is still a draft. Mirrors the exact logic of the actions-needed page so
+      // the badge count always matches what that page shows — no stale drafts counted.
       const { data: engagements } = await supabase
         .from('cro_engagements')
         .select('id')
@@ -95,18 +96,24 @@ export default function BiotechNav() {
       let pendingDraftCount = 0;
       if (engagements?.length) {
         const engIds = engagements.map(e => e.id);
-        const { data: drafts } = await supabase
+        // Fetch all AI outbound messages ordered newest-first
+        const { data: allAiMsgs } = await supabase
           .from('engagement_messages')
-          .select('engagement_id')
+          .select('engagement_id, status')
           .in('engagement_id', engIds)
           .eq('direction', 'outbound')
           .eq('ai_generated', true)
-          .eq('status', 'draft');
+          .order('created_at', { ascending: false });
 
-        // Deduplicate: count distinct engagements with a pending draft
-        if (drafts?.length) {
-          pendingDraftCount = new Set(drafts.map(d => d.engagement_id)).size;
+        // First entry per engagement = most recent AI message
+        const latestPerEng = new Map<string, string>();
+        for (const m of allAiMsgs ?? []) {
+          if (!latestPerEng.has(m.engagement_id)) {
+            latestPerEng.set(m.engagement_id, m.status);
+          }
         }
+        // Only count engagements where the most recent AI message is still a draft
+        pendingDraftCount = Array.from(latestPerEng.values()).filter(s => s === 'draft').length;
       }
 
       setUnreadCount(Math.max(notifCount ?? 0, pendingDraftCount));
