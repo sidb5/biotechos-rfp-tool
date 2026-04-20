@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
 
   const { data: engagement } = await adminSupabase
     .from('cro_engagements')
-    .select('id, user_id, stage, cro_name')
+    .select('id, user_id, stage, cro_name, brief_id')
     .eq('id', engagementId)
     .maybeSingle();
 
@@ -219,7 +219,9 @@ export async function POST(req: NextRequest) {
 
       const appUrl    = process.env.NEXT_PUBLIC_APP_URL
         ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-      const engUrl    = `${appUrl}/biotech/engagements/${engagementId}`;
+      // Route to the correct persona's engagements page
+      const persona   = engagement.brief_id ? 'biotech' : 'cro';
+      const engUrl    = `${appUrl}/${persona}/engagements/${engagementId}`;
       const croName   = engagement.cro_name ?? 'CRO';
       const bodyText  = text ?? html ?? '(no body)';
 
