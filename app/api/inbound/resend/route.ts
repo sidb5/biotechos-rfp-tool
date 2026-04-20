@@ -76,24 +76,29 @@ export async function POST(req: NextRequest) {
   const emailId   = rawPayload.email_id as string | undefined;
 
   // Resend's email.received webhook does NOT include text/html body in the
-  // payload — only metadata. Fetch the full body via the API using email_id.
+  // payload — only metadata. Fetch the full body via the Received Emails API
+  // (resend.emails.receiving.get — a separate endpoint from the sent-email
+  // emails.get endpoint, which returns 404 for inbound messages).
   let text: string | undefined = payload.text;
   let html: string | undefined = payload.html;
   if (!text && !html && emailId && process.env.RESEND_API_KEY) {
     try {
-      const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
-        headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}` },
-      });
-      if (res.ok) {
-        const fullEmail = await res.json() as { text?: string; html?: string };
-        text = fullEmail.text;
-        html = fullEmail.html;
-        console.log('[inbound] Fetched body from API — text?', !!text, 'html?', !!html);
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const received = (resend.emails as any).receiving;
+      if (received && typeof received.get === 'function') {
+        const { data: email } = await received.get(emailId);
+        if (email) {
+          text = email.text ?? undefined;
+          html = email.html ?? undefined;
+          console.log('[inbound] Fetched body via receiving.get — text?', !!text, 'html?', !!html);
+        }
       } else {
-        console.warn('[inbound] Resend API fetch failed', res.status, await res.text().catch(() => ''));
+        console.warn('[inbound] resend.emails.receiving.get not available in SDK version — may need update');
       }
     } catch (err) {
-      console.error('[inbound] Resend API fetch error', err);
+      console.error('[inbound] Received-email fetch failed', err);
     }
   }
 
