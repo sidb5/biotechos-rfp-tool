@@ -52,15 +52,21 @@ export async function POST(req: NextRequest) {
   );
 
   let payload: ResendInboundPayload;
+  let rawBody: Record<string, unknown>;
   try {
-    const body = await req.json() as Record<string, unknown>;
+    rawBody = await req.json() as Record<string, unknown>;
     // Resend wraps webhook events: { type: "email.received", data: { from, to, ... } }
     // Fall back to top-level if no data envelope (future-proofing)
-    payload = (body.data ?? body) as ResendInboundPayload;
+    payload = (rawBody.data ?? rawBody) as ResendInboundPayload;
   } catch {
     console.error('[inbound] Invalid JSON payload');
     return NextResponse.json({ ok: false, reason: 'invalid_json' });
   }
+
+  // Debug: log full payload keys so we can see what Resend actually sends
+  console.log('[inbound] raw envelope keys:', Object.keys(rawBody));
+  console.log('[inbound] data keys:', Object.keys(payload as unknown as Record<string, unknown>));
+  console.log('[inbound] has text?', !!(payload as ResendInboundPayload).text, 'has html?', !!(payload as ResendInboundPayload).html);
 
   const { from, to, subject, text, html } = payload;
   // Resend may send message_id (snake_case) or messageId (camelCase)
@@ -218,12 +224,21 @@ export async function POST(req: NextRequest) {
 
   // ── Trigger AI draft (Task 9) — async, don't block response ──────────────
   // Fire-and-forget: generate AI draft for this inbound reply
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  // Prefer NEXT_PUBLIC_APP_URL, but fall back to Vercel's auto-set VERCEL_URL
+  // so this works even when NEXT_PUBLIC_APP_URL is not configured
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  console.log('[inbound] Triggering draft at', appUrl, 'for message', newMsg.id);
   void fetch(`${appUrl}/api/inbound/draft`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.CRON_SECRET ?? '' },
     body:    JSON.stringify({ engagement_id: engagementId, message_id: newMsg.id }),
-  }).catch(err => console.error('[inbound] Draft trigger failed', err));
+  })
+    .then(async r => {
+      const text = await r.text().catch(() => '(no body)');
+      console.log('[inbound] Draft trigger response:', r.status, text);
+    })
+    .catch(err => console.error('[inbound] Draft trigger failed', err));
 
   return NextResponse.json({ ok: true, message_id: newMsg.id });
 }

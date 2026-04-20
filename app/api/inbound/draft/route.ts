@@ -38,11 +38,14 @@ const TERMINAL_STAGES = new Set(['awarded', 'closed']);
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  console.log('[draft] POST received');
   // Verify internal caller
   const secret = req.headers.get('x-internal-secret');
   if (!secret || secret !== process.env.CRON_SECRET) {
+    console.warn('[draft] Unauthorized — secret present?', !!secret, 'cron_secret set?', !!process.env.CRON_SECRET);
     return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   }
+  console.log('[draft] Authorized');
 
   const adminSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -92,6 +95,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   const captureMode = (userSettings as { capture_mode?: string } | null)?.capture_mode ?? 'assisted';
+  console.log('[draft] initiator:', initiator, 'captureMode:', captureMode, 'engagement:', engagement_id);
   if (captureMode !== 'assisted') {
     console.log('[draft] Skipping — native mode', engagement_id);
     return NextResponse.json({ ok: true, reason: 'native_mode_skipped' });
