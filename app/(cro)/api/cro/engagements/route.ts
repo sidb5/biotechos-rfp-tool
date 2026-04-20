@@ -24,21 +24,30 @@ import { createClient } from '@supabase/supabase-js';
 //   Forwarded gmail: "---------- Forwarded message --------- \nFrom: ..."
 //   Quoted-printable: encoded names (we just find the email inside)
 //
-// Returns the first plausible sender email, or null if none found.
+// Returns the first plausible sender email + display name, or nulls if not found.
 
 const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 
-function extractSenderEmail(raw: string): string | null {
-  if (!raw || !raw.trim()) return null;
+function extractSender(raw: string): { email: string | null; name: string | null } {
+  if (!raw || !raw.trim()) return { email: null, name: null };
 
   const lines = raw.split(/\r?\n/);
 
-  // Priority 1: "From:" header line
+  // Priority 1: "From:" header line — also parse display name
   for (const line of lines) {
     const trimmed = line.trim();
     if (/^From:\s*/i.test(trimmed)) {
       const emails = trimmed.match(EMAIL_RE);
-      if (emails?.length) return emails[0].toLowerCase();
+      if (!emails?.length) continue;
+      const email = emails[0].toLowerCase();
+
+      // Try "Display Name <email>" format
+      const nameAngle = trimmed.match(/^From:\s*(.+?)\s*<[^>]+>/i);
+      if (nameAngle) {
+        const name = nameAngle[1].trim().replace(/^["']|["']$/g, '');
+        if (name && name.length > 1) return { email, name };
+      }
+      return { email, name: null };
     }
   }
 
@@ -47,15 +56,15 @@ function extractSenderEmail(raw: string): string | null {
     const trimmed = line.trim();
     if (/^Reply-To:\s*/i.test(trimmed)) {
       const emails = trimmed.match(EMAIL_RE);
-      if (emails?.length) return emails[0].toLowerCase();
+      if (emails?.length) return { email: emails[0].toLowerCase(), name: null };
     }
   }
 
   // Priority 3: first email in the entire text (fallback)
   const allEmails = raw.match(EMAIL_RE);
-  if (allEmails?.length) return allEmails[0].toLowerCase();
+  if (allEmails?.length) return { email: allEmails[0].toLowerCase(), name: null };
 
-  return null;
+  return { email: null, name: null };
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -75,8 +84,8 @@ export async function POST(req: NextRequest) {
 
   if (action === 'extract-sender') {
     const pasted = (body.pasted_email as string | undefined) ?? '';
-    const extracted = extractSenderEmail(pasted);
-    return NextResponse.json({ extracted_email: extracted });
+    const { email, name } = extractSender(pasted);
+    return NextResponse.json({ extracted_email: email, extracted_name: name });
   }
 
   // ── Create engagement ─────────────────────────────────────────────────────
