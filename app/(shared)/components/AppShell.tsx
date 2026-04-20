@@ -25,10 +25,6 @@ const PRIMARY_NAV = [
     href: '/actions-needed', label: 'Actions Needed',
     icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
   },
-  {
-    href: '/notifications', label: 'Notifications',
-    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
-  },
 ];
 
 const SECONDARY_NAV = [
@@ -98,11 +94,37 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
   const [unreadCount, setUnreadCount] = useState(0);
   useEffect(() => {
     async function fetchUnread() {
-      const { count } = await supabase
+      // Source 1: unread notifications
+      const { count: notifCount } = await supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .eq('read', false);
-      setUnreadCount(count ?? 0);
+
+      // Source 2: engagement_messages — most-recent AI draft per engagement still pending
+      const { data: { user } } = await supabase.auth.getUser();
+      let pendingDraftCount = 0;
+      if (user) {
+        const { data: engs } = await supabase
+          .from('cro_engagements')
+          .select('id')
+          .eq('user_id', user.id);
+        if (engs?.length) {
+          const engIds = engs.map((e: {id: string}) => e.id);
+          const { data: msgs } = await supabase
+            .from('engagement_messages')
+            .select('engagement_id, status')
+            .in('engagement_id', engIds)
+            .eq('direction', 'outbound')
+            .eq('ai_generated', true)
+            .order('created_at', { ascending: false });
+          const latest = new Map<string, string>();
+          for (const m of msgs ?? []) {
+            if (!latest.has(m.engagement_id)) latest.set(m.engagement_id, m.status);
+          }
+          pendingDraftCount = Array.from(latest.values()).filter(s => s === 'draft').length;
+        }
+      }
+      setUnreadCount(Math.max(notifCount ?? 0, pendingDraftCount));
     }
     void fetchUnread();
     const interval = setInterval(() => { void fetchUnread(); }, 10_000);
@@ -178,11 +200,6 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
               >
                 <span className={active ? 'text-green-600' : 'text-gray-400'}>{icon}</span>
                 <span className="flex-1">{label}</span>
-                {href === '/notifications' && unreadCount > 0 && (
-                  <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold text-white">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
                 {href === '/actions-needed' && unreadCount > 0 && (
                   <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-green-600 px-1.5 text-[10px] font-bold text-white">
                     {unreadCount > 99 ? '99+' : unreadCount}

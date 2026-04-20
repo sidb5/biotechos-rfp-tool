@@ -72,6 +72,38 @@ export default async function DashboardPage() {
   ).length;
   const hoursSaved = allProposals.length * 27;
 
+  // ─── Engagement AI draft items ────────────────────────────────────────────
+  const { data: pendingEngDrafts } = await supabase
+    .from('cro_engagements')
+    .select('id, cro_name')
+    .eq('user_id', user.id ?? '');
+
+  const engagementIds = (pendingEngDrafts ?? []).map(e => e.id);
+  let engDraftItems: AttentionItem[] = [];
+  if (engagementIds.length > 0) {
+    const { data: draftMsgs } = await supabase
+      .from('engagement_messages')
+      .select('id, engagement_id, created_at')
+      .in('engagement_id', engagementIds)
+      .eq('direction', 'outbound')
+      .eq('ai_generated', true)
+      .eq('status', 'draft')
+      .order('created_at', { ascending: false });
+
+    const seen = new Set<string>();
+    for (const msg of draftMsgs ?? []) {
+      if (seen.has(msg.engagement_id)) continue;
+      seen.add(msg.engagement_id);
+      const eng = (pendingEngDrafts ?? []).find(e => e.id === msg.engagement_id);
+      engDraftItems.push({
+        key: `engdraft-${msg.engagement_id}`,
+        label: `Reply received from ${eng?.cro_name ?? 'client'} — AI draft ready for review`,
+        actionLabel: 'Review & send →',
+        actionHref: `/engagements/${msg.engagement_id}`,
+      });
+    }
+  }
+
   // ─── Attention items ───────────────────────────────────────────────────────
   const attentionItems: AttentionItem[] = [];
   const nowMs = Date.now();
@@ -139,7 +171,8 @@ export default async function DashboardPage() {
     }
   }
 
-  const topAttentionItems = attentionItems.slice(0, 5);
+  const allAttentionItems = [...engDraftItems, ...attentionItems];
+  const topAttentionItems = allAttentionItems.slice(0, 5);
 
   // ─── Pill helpers ──────────────────────────────────────────────────────────
   const statusPill: Record<string, { label: string; cls: string }> = {
