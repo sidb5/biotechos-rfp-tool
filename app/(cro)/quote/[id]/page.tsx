@@ -14,7 +14,7 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
 
   const { data: proposal } = await supabase
     .from('proposals')
-    .select('id, cro_id, rfp_id, status, quote_data, share_token, share_enabled, share_views, engagement_id')
+    .select('id, cro_id, rfp_id, status, quote_data, share_token, share_enabled, share_views, engagement_id, outcome, outcome_date, outcome_notes, contract_value, loss_reason')
     .eq('id', proposalId)
     .single();
 
@@ -110,6 +110,10 @@ export default async function QuotePage({ params }: { params: { id: string } }) 
         plan={plan}
         rawText={rfp?.raw_text ?? null}
         engagementId={(proposal as Record<string, unknown>).engagement_id as string | null ?? null}
+        initialOutcome={(proposal as Record<string, unknown>).outcome as string | null ?? null}
+        initialContractValue={(proposal as Record<string, unknown>).contract_value as number | null ?? null}
+        initialLossReason={(proposal as Record<string, unknown>).loss_reason as string | null ?? null}
+        initialOutcomeNotes={(proposal as Record<string, unknown>).outcome_notes as string | null ?? null}
       />
     </AppShell>
   );

@@ -75,6 +75,11 @@ interface QuoteBuilderProps {
   rawText?: string | null;
   /** Persisted engagement_id from the proposals table — set when the quote was previously sent. */
   engagementId?: string | null;
+  /** Outcome tracking fields persisted on the proposal record. */
+  initialOutcome?: string | null;
+  initialContractValue?: number | null;
+  initialLossReason?: string | null;
+  initialOutcomeNotes?: string | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -859,6 +864,10 @@ export default function QuoteBuilder({
   plan,
   rawText,
   engagementId: initialEngagementId,
+  initialOutcome,
+  initialContractValue,
+  initialLossReason,
+  initialOutcomeNotes,
 }: QuoteBuilderProps) {
   const pdfAllowed  = canAccess('pdf_export',  plan) as boolean;
   const wordAllowed = canAccess('word_export',  plan) as boolean;
@@ -977,6 +986,66 @@ export default function QuoteBuilder({
   const [sendError, setSendError] = useState('');
   // Seeded from the DB prop so the link persists across page reloads.
   const [sentEngagementId, setSentEngagementId] = useState<string | null>(initialEngagementId ?? null);
+
+  // ── Outcome tracking ────────────────────────────────────────────────────────
+  const [outcome, setOutcome]               = useState<string | null>(initialOutcome ?? null);
+  const [outcomeLoading, setOutcomeLoading] = useState(false);
+  const [showOutcomeForm, setShowOutcomeForm] = useState(false);
+  const [outcomeContractValue, setOutcomeContractValue] = useState(
+    initialContractValue ? String(initialContractValue) : '',
+  );
+  const [outcomeLossReason, setOutcomeLossReason] = useState(initialLossReason ?? '');
+  const [outcomeNotes, setOutcomeNotes]           = useState(initialOutcomeNotes ?? '');
+  const [pendingOutcome, setPendingOutcome]         = useState<string | null>(null);
+
+  async function handleSaveOutcome(chosenOutcome: string) {
+    setOutcomeLoading(true);
+    try {
+      const body: Record<string, unknown> = {
+        outcome:      chosenOutcome,
+        outcome_date: new Date().toISOString().slice(0, 10),
+      };
+      if (chosenOutcome === 'won' && outcomeContractValue) {
+        const num = parseFloat(outcomeContractValue.replace(/[$,]/g, ''));
+        if (!isNaN(num)) body.contract_value = num;
+      }
+      if (chosenOutcome === 'lost' && outcomeLossReason) {
+        body.loss_reason = outcomeLossReason;
+      }
+      if (outcomeNotes.trim()) body.outcome_notes = outcomeNotes.trim();
+
+      const res = await fetch(`/api/proposal/${proposalId}/outcome`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to save outcome');
+      setOutcome(chosenOutcome);
+      setShowOutcomeForm(false);
+      setPendingOutcome(null);
+    } catch { /* silent */ }
+    setOutcomeLoading(false);
+  }
+
+  function openOutcomeForm(o: string) {
+    setPendingOutcome(o);
+    setShowOutcomeForm(true);
+  }
+
+  const OUTCOME_OPTIONS: { value: string; label: string; cls: string }[] = [
+    { value: 'won',         label: 'Won',         cls: 'border-green-200 text-green-700 hover:bg-green-50 focus:ring-green-200' },
+    { value: 'lost',        label: 'Lost',        cls: 'border-red-200 text-red-600 hover:bg-red-50 focus:ring-red-200'         },
+    { value: 'no_decision', label: 'No decision', cls: 'border-gray-200 text-gray-500 hover:bg-gray-50 focus:ring-gray-200'    },
+    { value: 'withdrawn',   label: 'Withdrawn',   cls: 'border-gray-200 text-gray-500 hover:bg-gray-50 focus:ring-gray-200'    },
+  ];
+
+  const OUTCOME_PILLS: Record<string, { label: string; cls: string }> = {
+    won:         { label: 'Won ✓',      cls: 'bg-green-50 text-green-700'   },
+    lost:        { label: 'Lost',       cls: 'bg-red-50 text-red-600'       },
+    pending:     { label: 'Pending',    cls: 'bg-yellow-50 text-yellow-700' },
+    no_decision: { label: 'No decision',cls: 'bg-gray-100 text-gray-500'    },
+    withdrawn:   { label: 'Withdrawn',  cls: 'bg-gray-100 text-gray-500'    },
+  };
 
   function openSendModal() {
     const defaultSubject = data.mode === 'full_proposal'
@@ -1359,6 +1428,120 @@ export default function QuoteBuilder({
                   <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
                   Quote sent — track replies and manage the conversation →
                 </a>
+              )}
+
+              {/* ── Outcome tracker ── shown after quote is sent */}
+              {sent && (
+                <div className="border border-gray-200 rounded-lg p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Outcome</p>
+                    {outcome && !showOutcomeForm && (
+                      <button
+                        onClick={() => { setShowOutcomeForm(true); setPendingOutcome(null); }}
+                        className="text-[11px] text-gray-400 hover:text-gray-600"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Current outcome pill */}
+                  {outcome && !showOutcomeForm && (
+                    <span className={`self-start px-2 py-0.5 rounded-full text-xs font-medium ${OUTCOME_PILLS[outcome]?.cls ?? 'bg-gray-100 text-gray-500'}`}>
+                      {OUTCOME_PILLS[outcome]?.label ?? outcome}
+                    </span>
+                  )}
+
+                  {/* No outcome yet — prompt */}
+                  {!outcome && !showOutcomeForm && (
+                    <button
+                      onClick={() => setShowOutcomeForm(true)}
+                      className="text-xs text-green-600 hover:text-green-700 font-medium text-left"
+                    >
+                      Mark won / lost →
+                    </button>
+                  )}
+
+                  {/* Outcome form */}
+                  {showOutcomeForm && (
+                    <div className="flex flex-col gap-2">
+                      {/* Outcome buttons */}
+                      <div className="grid grid-cols-2 gap-1">
+                        {OUTCOME_OPTIONS.map(o => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => openOutcomeForm(o.value)}
+                            className={`py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-none focus:ring-1 ${o.cls} ${
+                              pendingOutcome === o.value ? 'ring-2' : ''
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Won: optional contract value */}
+                      {pendingOutcome === 'won' && (
+                        <input
+                          type="text"
+                          value={outcomeContractValue}
+                          onChange={e => setOutcomeContractValue(e.target.value)}
+                          placeholder="Contract value (e.g. 85000)"
+                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-300 placeholder-gray-400"
+                        />
+                      )}
+
+                      {/* Lost: optional loss reason */}
+                      {pendingOutcome === 'lost' && (
+                        <select
+                          value={outcomeLossReason}
+                          onChange={e => setOutcomeLossReason(e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-300 text-gray-700"
+                        >
+                          <option value="">Loss reason (optional)</option>
+                          <option value="price">Price / budget</option>
+                          <option value="competitor">Chose a competitor</option>
+                          <option value="timeline">Timeline mismatch</option>
+                          <option value="capability">Capability gap</option>
+                          <option value="no_response">No response</option>
+                          <option value="scope_mismatch">Scope mismatch</option>
+                          <option value="other">Other</option>
+                        </select>
+                      )}
+
+                      {/* Notes — shown for won/lost */}
+                      {(pendingOutcome === 'won' || pendingOutcome === 'lost') && (
+                        <textarea
+                          value={outcomeNotes}
+                          onChange={e => setOutcomeNotes(e.target.value)}
+                          placeholder="Notes (optional)"
+                          rows={2}
+                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-gray-300 placeholder-gray-400"
+                        />
+                      )}
+
+                      {/* Save / cancel */}
+                      {pendingOutcome && (
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleSaveOutcome(pendingOutcome)}
+                            disabled={outcomeLoading}
+                            className="flex-1 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {outcomeLoading ? 'Saving…' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => { setShowOutcomeForm(false); setPendingOutcome(null); }}
+                            className="px-3 py-1.5 border border-gray-200 text-gray-500 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
