@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   const { data: engagement } = await adminSupabase
     .from('cro_engagements')
-    .select('id, user_id, cro_name, cro_email, stage, capture_mode, initiator, brief_id')
+    .select('id, user_id, cro_name, cro_email, stage, brief_id')
     .eq('id', engagement_id)
     .maybeSingle();
 
@@ -75,14 +75,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, reason: 'engagement_not_found' });
   }
 
-  if (engagement.capture_mode !== 'assisted') {
-    console.log('[draft] Skipping — native mode', engagement_id);
-    return NextResponse.json({ ok: true, reason: 'native_mode_skipped' });
-  }
-
   if (TERMINAL_STAGES.has(engagement.stage)) {
     console.log('[draft] Skipping — terminal stage', engagement.stage, engagement_id);
     return NextResponse.json({ ok: true, reason: 'terminal_stage_skipped' });
+  }
+
+  // initiator: biotech if brief_id is set (biotech created this engagement), else cro
+  const initiator = engagement.brief_id ? 'biotech' : 'cro';
+
+  // capture_mode lives in per-user settings tables, not on the engagement row
+  const settingsTable = initiator === 'biotech' ? 'biotech_user_settings' : 'cro_user_settings';
+  const { data: userSettings } = await adminSupabase
+    .from(settingsTable)
+    .select('capture_mode')
+    .eq('user_id', engagement.user_id)
+    .maybeSingle();
+
+  const captureMode = (userSettings as { capture_mode?: string } | null)?.capture_mode ?? 'assisted';
+  if (captureMode !== 'assisted') {
+    console.log('[draft] Skipping — native mode', engagement_id);
+    return NextResponse.json({ ok: true, reason: 'native_mode_skipped' });
   }
 
   // ── Fetch the triggering inbound message ────────────────────────────────────
@@ -113,7 +125,7 @@ export async function POST(req: NextRequest) {
   let senderName: string    = '';
   let senderCompany: string = '';
 
-  if (engagement.initiator === 'cro') {
+  if (initiator === 'cro') {
     // CRO-initiated: pull CRO profile for context
     const { data: profile } = await adminSupabase
       .from('cro_profiles')
@@ -135,7 +147,7 @@ export async function POST(req: NextRequest) {
 
   // ── Build prompt ────────────────────────────────────────────────────────────
 
-  const isCro       = engagement.initiator === 'cro';
+  const isCro        = initiator === 'cro';
   const systemPrompt = isCro ? CRO_SYSTEM : BIOTECH_SYSTEM;
 
   const historyText = (history ?? [])
@@ -237,7 +249,7 @@ export async function POST(req: NextRequest) {
       engagement_id,
       draft_id:  draftMsg.id,
       user_id:   engagement.user_id,
-      initiator: engagement.initiator,
+      initiator,
       cro_name:  engagement.cro_name,
       cro_email: engagement.cro_email,
     }),
