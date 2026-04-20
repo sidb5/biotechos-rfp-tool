@@ -162,10 +162,14 @@ export async function POST(req: NextRequest) {
     })
     .join('\n\n---\n\n');
 
+  const todayIso = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
   const userPrompt = [
     isCro
       ? `You are drafting a reply on behalf of a CRO (Contract Research Organization) responding to a biotech client.`
       : `You are drafting a reply on behalf of a biotech company responding to a CRO (Contract Research Organization).`,
+    ``,
+    `TODAY'S DATE: ${todayIso}`,
     ``,
     senderName    ? `Our name:    ${senderName}`    : '',
     senderCompany ? `Our company: ${senderCompany}` : '',
@@ -179,6 +183,7 @@ export async function POST(req: NextRequest) {
     triggerMsg.body ?? '(no body)',
     ``,
     `== INSTRUCTIONS ==`,
+    `Today's date is ${todayIso}. Use this as the authoritative current date when reasoning about timelines, deadlines, or urgency.`,
     `Write a professional, concise reply to the message above.`,
     `- Use plain text only (no HTML, no markdown).`,
     `- Do not start with "Dear" or generic pleasantries — get to the point.`,
@@ -242,7 +247,8 @@ export async function POST(req: NextRequest) {
 
   // ── Trigger notifications (Tasks 11 + 12) — fire and forget ─────────────────
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   void fetch(`${appUrl}/api/notify/draft-ready`, {
     method:  'POST',
     headers: {

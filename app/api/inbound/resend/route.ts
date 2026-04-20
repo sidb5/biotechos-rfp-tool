@@ -223,26 +223,42 @@ export async function POST(req: NextRequest) {
       const croName   = engagement.cro_name ?? 'CRO';
       const bodyText  = text ?? html ?? '(no body)';
 
-      // Plain text forward — avoids spam filters and looks like a real email
-      const forwardText = [
-        `Forwarded from ${from} — engagement with ${croName}.`,
-        ``,
-        `—————————————`,
-        ``,
-        bodyText,
-        ``,
-        `—————————————`,
-        ``,
-        `View engagement and draft reply: ${engUrl}`,
-        ``,
-        `Managed by BiotechOS.`,
-      ].join('\n');
+      // HTML email: prominent CTA button at top, then forwarded plain-text body below
+      const forwardHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px">
+
+  <div style="margin-bottom:24px;padding:16px;background:#f0f7ff;border-radius:8px;border:1px solid #c0d8f0;text-align:center">
+    <p style="margin:0 0 12px 0;font-size:15px;font-weight:600;color:#1a1a1a">
+      ${croName} replied to your enquiry
+    </p>
+    <a href="${engUrl}"
+       style="display:inline-block;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600">
+      View Engagement &amp; Draft Reply →
+    </a>
+    <p style="margin:10px 0 0 0;font-size:12px;color:#666">
+      Or copy this link: ${engUrl}
+    </p>
+  </div>
+
+  <p style="margin:0 0 8px 0;color:#555;font-size:13px">
+    <strong>Forwarded from:</strong> ${from}
+  </p>
+  <hr style="border:none;border-top:1px solid #ddd;margin:12px 0">
+  <div style="white-space:pre-wrap;font-size:14px">${bodyText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')}</div>
+  <hr style="border:none;border-top:1px solid #ddd;margin:16px 0">
+  <p style="margin:0;font-size:12px;color:#999">Managed by BiotechOS.</p>
+
+</body></html>`;
 
       const { sendEmail } = await import('@shared/lib/email');
       await sendEmail({
         to:           userEmail,
         subject:      `[Fwd] ${subject ?? 'Reply from ' + from}`,
-        text:         forwardText,
+        html:         forwardHtml,
         templateName: 'inbound_forward',
         userId:       engagement.user_id,
       });
