@@ -55,23 +55,23 @@ export default function BiotechSettingsPage() {
           .eq('user_id', user.id)
           .maybeSingle();
 
+        const defaultName =
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name      ||
+          '';
         if (data) {
           setForm({
-            sender_display_name:    data.sender_display_name    ?? '',
-            sender_email:           data.sender_email           ?? '',
+            sender_display_name:    data.sender_display_name    ?? defaultName,
+            sender_email:           data.sender_email           ?? user.email ?? '',
             company_name:           data.company_name           ?? '',
             scheduling_link:        data.scheduling_link        ?? '',
             response_deadline_days: data.response_deadline_days ?? 10,
             capture_mode:           (data.capture_mode as 'assisted' | 'native') ?? 'assisted',
           });
         } else {
-          const metaName =
-            user.user_metadata?.full_name ||
-            user.user_metadata?.name      ||
-            '';
           setForm(prev => ({
             ...prev,
-            sender_display_name: metaName,
+            sender_display_name: defaultName,
             sender_email:        user.email ?? '',
           }));
         }

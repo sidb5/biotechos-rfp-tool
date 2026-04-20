@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@shared/lib/supabase-server';
 import AppShell from '@shared/components/AppShell';
-import DashboardActionBar from '@cro/components/DashboardActionBar';
-import DashboardFirstRun from '@cro/components/DashboardFirstRun';
 import ReferralBanner from '@shared/components/ReferralBanner';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -50,32 +48,40 @@ export default async function DashboardPage() {
 
   const { data: proposals } = await supabase
     .from('proposals')
-    .select('id, status, rfp_id, created_at, updated_at, outcome, share_enabled, share_views, share_last_viewed_at, rfps(biotech_name, parsed_summary)')
+    .select('id, status, rfp_id, created_at, updated_at, outcome, quote_data, share_enabled, share_views, share_last_viewed_at, rfps(biotech_name, parsed_summary)')
     .eq('cro_id', profile?.id ?? '')
+    .neq('status', 'archived')
     .order('updated_at', { ascending: false });
 
   const allProposals = proposals ?? [];
 
-  // ─── Zone 3 stats ───────────────────────────────────────────────────────────
+  // ─── Split into RFP bids vs quotes ────────────────────────────────────────
+  const isRfpBid = (p: typeof allProposals[number]) => {
+    const rfpData = p.rfps as { parsed_summary?: { request_type?: string } } | null;
+    const mode = (p.quote_data as { mode?: string } | null)?.mode;
+    return rfpData?.parsed_summary?.request_type === 'formal_rfp' || mode === 'full_proposal';
+  };
+
+  const recentRfpBids = allProposals.filter(isRfpBid).slice(0, 5);
+  const recentQuotes  = allProposals.filter(p => !isRfpBid(p)).slice(0, 5);
+
+  // ─── Stats ─────────────────────────────────────────────────────────────────
   const quotesThisMonth = allProposals.filter(p => p.created_at && isThisMonth(p.created_at)).length;
-  const sentThisMonth = allProposals.filter(
+  const sentThisMonth   = allProposals.filter(
     p => p.status === 'complete' && p.updated_at && isThisMonth(p.updated_at)
   ).length;
   const hoursSaved = allProposals.length * 27;
 
-  // ─── Zone 2 left: recent requests (last 5) ─────────────────────────────────
-  const recentRequests = allProposals.slice(0, 5);
-
-  // ─── Zone 2 right: needs attention (max 5) ─────────────────────────────────
+  // ─── Attention items ───────────────────────────────────────────────────────
   const attentionItems: AttentionItem[] = [];
   const nowMs = Date.now();
   const fortyEightHoursAgo = new Date(nowMs - 48 * 3600_000);
-  const fourteenDaysAgo = new Date(nowMs - 14 * 86_400_000);
+  const fourteenDaysAgo    = new Date(nowMs - 14 * 86_400_000);
+  const sixtyMinsAgo       = new Date(nowMs - 60 * 60_000);
 
-  // 1. Upcoming deadlines within 7 days (most urgent)
   for (const p of allProposals) {
     if (p.outcome === 'won' || p.outcome === 'lost') continue;
-    const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: { submission_deadline?: string } } | null;
+    const rfpData  = p.rfps as { biotech_name?: string; parsed_summary?: { submission_deadline?: string } } | null;
     const deadline = rfpData?.parsed_summary?.submission_deadline;
     if (!deadline) continue;
     const daysUntil = Math.ceil((new Date(deadline).getTime() - nowMs) / 86_400_000);
@@ -90,7 +96,6 @@ export default async function DashboardPage() {
     }
   }
 
-  // 2. Draft quotes not sent after 48 hours
   for (const p of allProposals) {
     const rfpData = p.rfps as { biotech_name?: string } | null;
     if (
@@ -106,10 +111,8 @@ export default async function DashboardPage() {
     }
   }
 
-  // 0. Quote viewed within the last 60 minutes (highest priority)
-  const sixtyMinsAgo = new Date(nowMs - 60 * 60_000);
   for (const p of allProposals) {
-    const rfpData = p.rfps as { biotech_name?: string } | null;
+    const rfpData   = p.rfps as { biotech_name?: string } | null;
     const lastViewed = (p as Record<string, unknown>).share_last_viewed_at as string | null;
     if (lastViewed && new Date(lastViewed) > sixtyMinsAgo) {
       attentionItems.push({
@@ -121,7 +124,6 @@ export default async function DashboardPage() {
     }
   }
 
-  // 3. Submitted proposals with no outcome after 14 days
   for (const p of allProposals) {
     const rfpData = p.rfps as { biotech_name?: string } | null;
     if (
@@ -139,85 +141,71 @@ export default async function DashboardPage() {
 
   const topAttentionItems = attentionItems.slice(0, 5);
 
-  // ─── Status/outcome pill helpers ────────────────────────────────────────────
+  // ─── Pill helpers ──────────────────────────────────────────────────────────
   const statusPill: Record<string, { label: string; cls: string }> = {
-    draft:       { label: 'Draft',    cls: 'bg-gray-100 text-gray-500' },
-    in_progress: { label: 'Draft',    cls: 'bg-gray-100 text-gray-500' },
-    complete:    { label: 'Sent',     cls: 'bg-blue-50 text-blue-700'  },
+    draft:       { label: 'Draft',  cls: 'bg-gray-100 text-gray-500'  },
+    in_progress: { label: 'Draft',  cls: 'bg-gray-100 text-gray-500'  },
+    complete:    { label: 'Sent',   cls: 'bg-blue-50 text-blue-700'   },
+    sent:        { label: 'Sent',   cls: 'bg-blue-50 text-blue-700'   },
   };
   const outcomePill: Record<string, { label: string; cls: string }> = {
-    won:         { label: 'Won',      cls: 'bg-green-50 text-green-700'  },
-    lost:        { label: 'Lost',     cls: 'bg-red-50 text-red-600'      },
-    pending:     { label: 'Pending',  cls: 'bg-yellow-50 text-yellow-700'},
-    no_decision: { label: 'No decision', cls: 'bg-gray-100 text-gray-500' },
-    withdrawn:   { label: 'Withdrawn',   cls: 'bg-gray-100 text-gray-500' },
+    won:         { label: 'Won',        cls: 'bg-green-50 text-green-700'   },
+    lost:        { label: 'Lost',       cls: 'bg-red-50 text-red-600'       },
+    pending:     { label: 'Pending',    cls: 'bg-yellow-50 text-yellow-700' },
+    no_decision: { label: 'No decision',cls: 'bg-gray-100 text-gray-500'    },
+    withdrawn:   { label: 'Withdrawn',  cls: 'bg-gray-100 text-gray-500'    },
   };
 
-  // ─── First-run: zero proposals ─────────────────────────────────────────────
-  if (allProposals.length === 0) {
-    return (
-      <AppShell title="Dashboard" navInLayout>
-        <DashboardFirstRun />
-      </AppShell>
-    );
+  function pill(p: typeof allProposals[number]) {
+    const outcome = p.outcome as string | null | undefined;
+    return outcome
+      ? (outcomePill[outcome] ?? statusPill.draft)
+      : (statusPill[p.status ?? 'draft'] ?? statusPill.draft);
+  }
+
+  function clientName(p: typeof allProposals[number]) {
+    const rfpData = p.rfps as { biotech_name?: string } | null;
+    return rfpData?.biotech_name ?? 'Unknown client';
   }
 
   return (
     <AppShell title="Dashboard" navInLayout>
-      <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col gap-6">
+      <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
 
-        {/* ── Referral banner ────────────────────────────────────────────── */}
+        {/* ── Referral banner ── */}
         <ReferralBanner
           referralCode={(profile as Record<string, string | null> | null)?.referral_code ?? null}
           appUrl={process.env.NEXT_PUBLIC_APP_URL ?? 'https://cro-rfp-tool.vercel.app'}
         />
 
-        {/* ── Zone 1: Action bar ─────────────────────────────────────────── */}
-        <DashboardActionBar />
+        {/* ── 3-column grid ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-        {/* ── Zone 2: Activity columns ───────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-          {/* Recent requests */}
-          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-900">Recent RFPs / quote requests</h2>
+          {/* 1. Recent RFP Bids */}
+          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">Recent RFP Bids</h2>
+              <a href="/requests" className="text-xs text-green-600 hover:text-green-700 font-medium">View all →</a>
             </div>
-            {recentRequests.length === 0 ? (
-              <div className="px-5 py-10 text-center">
-                <p className="text-sm text-gray-400">No requests yet.</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Paste a client request above to get started.
-                </p>
+            {recentRfpBids.length === 0 ? (
+              <div className="px-5 py-10 text-center flex-1 flex flex-col items-center justify-center">
+                <p className="text-sm text-gray-400">No RFP bids yet.</p>
+                <a href="/rfp/new" className="mt-2 text-xs text-green-600 hover:text-green-700 font-medium">
+                  Upload an RFP →
+                </a>
               </div>
             ) : (
-              <ul className="divide-y divide-gray-50">
-                {recentRequests.map(p => {
-                  const rfpData = p.rfps as { biotech_name?: string; parsed_summary?: { study_type?: string } } | null;
-                  const outcome = p.outcome as string | null | undefined;
-                  const pill = outcome
-                    ? (outcomePill[outcome] ?? statusPill.draft)
-                    : (statusPill[p.status ?? 'draft'] ?? statusPill.draft);
+              <ul className="divide-y divide-gray-50 flex-1">
+                {recentRfpBids.map(p => {
+                  const { label, cls } = pill(p);
                   return (
                     <li key={p.id}>
-                      <a
-                        href={`/quote/${p.id}`}
-                        className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors"
-                      >
+                      <a href={`/quote/${p.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {rfpData?.biotech_name ?? 'Unknown client'}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px] font-medium">
-                              Full proposal
-                            </span>
-                            {timeAgo(p.updated_at)}
-                          </p>
+                          <p className="text-sm font-medium text-gray-900 truncate">{clientName(p)}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{timeAgo(p.updated_at)}</p>
                         </div>
-                        <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${pill.cls}`}>
-                          {pill.label}
-                        </span>
+                        <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>
                       </a>
                     </li>
                   );
@@ -226,23 +214,59 @@ export default async function DashboardPage() {
             )}
           </section>
 
-          {/* Needs attention */}
-          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-900">Action needed</h2>
+          {/* 2. Recent Quotes */}
+          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">Recent Quotes</h2>
+              <a href="/quotes" className="text-xs text-green-600 hover:text-green-700 font-medium">View all →</a>
+            </div>
+            {recentQuotes.length === 0 ? (
+              <div className="px-5 py-10 text-center flex-1 flex flex-col items-center justify-center">
+                <p className="text-sm text-gray-400">No quotes yet.</p>
+                <a href="/engagements/new" className="mt-2 text-xs text-green-600 hover:text-green-700 font-medium">
+                  Create a quote →
+                </a>
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-50 flex-1">
+                {recentQuotes.map(p => {
+                  const { label, cls } = pill(p);
+                  return (
+                    <li key={p.id}>
+                      <a href={`/quote/${p.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{clientName(p)}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{timeAgo(p.updated_at)}</p>
+                        </div>
+                        <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          {/* 3. Action Needed */}
+          <section className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+            <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">Action Needed</h2>
+              {topAttentionItems.length > 0 && (
+                <a href="/actions-needed" className="text-xs text-green-600 hover:text-green-700 font-medium">View all →</a>
+              )}
             </div>
             {topAttentionItems.length === 0 ? (
-              <div className="px-5 py-10 text-center">
+              <div className="px-5 py-10 text-center flex-1 flex items-center justify-center">
                 <p className="text-sm text-gray-400">Nothing needs attention right now.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-gray-50">
+              <ul className="divide-y divide-gray-50 flex-1">
                 {topAttentionItems.map(item => (
-                  <li key={item.key} className="flex items-center gap-3 px-5 py-3.5">
-                    <p className="flex-1 text-sm text-gray-700 leading-snug">{item.label}</p>
+                  <li key={item.key} className="px-5 py-3.5">
+                    <p className="text-sm text-gray-700 leading-snug mb-1">{item.label}</p>
                     <a
                       href={item.actionHref}
-                      className="shrink-0 text-xs text-green-600 hover:text-green-700 font-medium whitespace-nowrap"
+                      className="text-xs text-green-600 hover:text-green-700 font-medium"
                     >
                       {item.actionLabel}
                     </a>
@@ -251,9 +275,10 @@ export default async function DashboardPage() {
               </ul>
             )}
           </section>
+
         </div>
 
-        {/* ── Zone 3: Stats strip ────────────────────────────────────────── */}
+        {/* ── Stats strip ── */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-4 border-t border-gray-100 text-sm">
           <span className="text-gray-400">
             Quotes this month:{' '}
@@ -269,10 +294,7 @@ export default async function DashboardPage() {
             Est. hours saved:{' '}
             <span className="font-semibold text-gray-600">~{hoursSaved}h</span>
           </span>
-          <a
-            href="/analytics"
-            className="sm:ml-auto text-sm text-green-600 hover:text-green-700 font-medium"
-          >
+          <a href="/analytics" className="sm:ml-auto text-sm text-green-600 hover:text-green-700 font-medium">
             Full analytics →
           </a>
         </div>
