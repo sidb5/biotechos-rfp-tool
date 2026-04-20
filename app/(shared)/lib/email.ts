@@ -102,10 +102,14 @@ export async function sendEmail(opts: SendEmailOptions): Promise<{ ok: boolean; 
 // When RESEND_INBOUND_DOMAIN is not configured, falls back to userEmail
 // regardless of mode (safe degradation — inbound capture just won't work).
 
+// Optional displayName surfaces in the Reply-To header so recipients see
+// e.g. "Acme Bio via BiotechOS <reply.uuid@replies.domain>" instead of
+// a raw UUID address.
 export async function resolveReplyTo(
   engagementId: string,
   userEmail: string,
   adminSupabase: SupabaseClient,
+  displayName?: string,
 ): Promise<string> {
   const inboundDomain = process.env.RESEND_INBOUND_DOMAIN;
 
@@ -119,11 +123,15 @@ export async function resolveReplyTo(
     return userEmail;
   }
 
-  // Build deterministic address from engagement id
-  const assistedReplyTo = `e.${engagementId}@${inboundDomain}`;
+  // reply. prefix is more recognisable than bare e. — looks intentional to recipients.
+  // Display name further hides the UUID from casual inspection.
+  const assistedEmail   = `reply.${engagementId}@${inboundDomain}`;
+  const assistedReplyTo = displayName
+    ? `${displayName} via BiotechOS <${assistedEmail}>`
+    : `BiotechOS Replies <${assistedEmail}>`;
 
-  // Persist if not already stored (first send)
-  if (!eng.reply_to_address) {
+  // Persist / update stored address (handles migration from old e. prefix)
+  if (eng.reply_to_address !== assistedReplyTo) {
     await adminSupabase
       .from('cro_engagements')
       .update({ reply_to_address: assistedReplyTo })

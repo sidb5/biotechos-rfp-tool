@@ -108,7 +108,7 @@ export async function POST(
     const resend = new Resend(resendApiKey);
 
     // In assisted mode, replies from the counterparty should loop back to the app
-    const replyToAddress = await resolveReplyTo(engagementId, senderEmail, adminSupabase);
+    const replyToAddress = await resolveReplyTo(engagementId, senderEmail, adminSupabase, senderDisplayName);
 
     const { data: sendData, error: sendErr } = await resend.emails.send({
       from:    `${senderDisplayName} via BiotechOS <${verifiedFrom}>`,

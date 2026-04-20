@@ -128,7 +128,7 @@ export async function POST(
     const fromField = `${senderDisplayName} via BiotechOS <${verifiedFromEmail}>`;
 
     // Resolve reply-to: assisted mode → app inbound address; native → user email
-    const replyToAddress = await resolveReplyTo(engagement_id, senderEmail, adminSupabase);
+    const replyToAddress = await resolveReplyTo(engagement_id, senderEmail, adminSupabase, senderDisplayName);
 
     const { data: sendData, error: sendError } = await resend.emails.send({
       from:    fromField,

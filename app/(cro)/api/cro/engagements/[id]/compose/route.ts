@@ -84,7 +84,7 @@ export async function POST(
     const { Resend } = await import('resend');
     const resend = new Resend(resendApiKey);
 
-    const replyToAddress = await resolveReplyTo(engagementId, senderEmail, adminSupabase);
+    const replyToAddress = await resolveReplyTo(engagementId, senderEmail, adminSupabase, senderDisplayName);
 
     const { data: sendData, error: sendErr } = await resend.emails.send({
       from:    `${senderDisplayName} via BiotechOS <${verifiedFrom}>`,

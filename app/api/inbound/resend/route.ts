@@ -29,10 +29,12 @@ interface ResendInboundPayload {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Extract engagementId from e.{uuid}@domain address. Returns null if not matched. */
+/** Extract engagementId from reply.{uuid}@domain (or legacy e.{uuid}@domain) address.
+ *  Returns null if not matched. */
 function parseEngagementAddress(toField: string | string[]): string | null {
   const addresses = Array.isArray(toField) ? toField : [toField];
-  const pattern   = /^e\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@/i;
+  // Accept both the new reply. prefix and the legacy e. prefix during transition
+  const pattern   = /^(?:reply|e)\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@/i;
   for (const addr of addresses) {
     // Handles "Display Name <addr@domain>" and bare "addr@domain"
     const email = addr.includes('<') ? addr.replace(/.*<([^>]+)>.*/, '$1').trim() : addr.trim();
