@@ -14,7 +14,36 @@ import { teamQualificationsPrompt } from '@cro/prompts/team-qualifications';
 import { facilityOverviewPrompt } from '@cro/prompts/facility-overview';
 import { proposedTimelinePrompt } from '@cro/prompts/proposed-timeline';
 import { assumptionsExclusionsPrompt } from '@cro/prompts/assumptions-exclusions';
-import type { CROProfile, ParsedRFP, SectionName } from '@cro/types';
+import type { CROProfile, ParsedRFP, SectionName, Gap } from '@cro/types';
+
+function buildGapInjection(
+  answeredQuestions: { question_text: string; answer: string; answered_by_name: string | null }[],
+  pendingQuestions: string[]
+): string {
+  if (answeredQuestions.length === 0 && pendingQuestions.length === 0) return '';
+
+  let text = '';
+
+  if (answeredQuestions.length > 0) {
+    const lines = answeredQuestions.map(q =>
+      `- ${q.question_text}: ${q.answer}${q.answered_by_name ? ` (confirmed by ${q.answered_by_name})` : ''}`
+    );
+    text += `\n\nRESOLVED GAP DATA — use these exact figures verbatim in the proposal.
+Do not paraphrase, round, or restate these values. Weave them naturally into relevant prose.
+If a specific item is not relevant to this section, skip it.
+
+${lines.join('\n')}`;
+  }
+
+  if (pendingQuestions.length > 0) {
+    const placeholders = pendingQuestions.map(q => `- [DATA NEEDED — ${q}]`);
+    text += `\n\nUNRESOLVED GAPS — for each item below, insert the placeholder text exactly as shown, inline in the relevant part of the section. Do not leave these out.
+
+${placeholders.join('\n')}`;
+  }
+
+  return text;
+}
 
 const SECTION_PROMPTS: Record<string, (profile: CROProfile, rfp: ParsedRFP) => string> = {
   executive_summary:      (p, r) => executiveSummaryPrompt(p, r),
@@ -30,11 +59,19 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let proposalId: string, sectionName: string;
+  let proposalId: string, sectionName: string, includeGapAnswers: boolean, pendingGapQuestions: string[];
   try {
     const body = await request.json();
     proposalId = body.proposal_id;
     sectionName = body.section_name;
+    // Truthy when answered_gaps were passed (any non-empty array) — signals "fetch answers from DB"
+    const passedGaps: Gap[] | undefined = body.answered_gaps;
+    includeGapAnswers = Array.isArray(passedGaps) && passedGaps.length > 0;
+    // Pending gaps: questions the SME hasn't answered yet → insert [DATA NEEDED] placeholders
+    const passedPending: Gap[] | undefined = body.pending_gaps;
+    pendingGapQuestions = Array.isArray(passedPending)
+      ? passedPending.map((g: Gap) => g.question_for_sme).filter(Boolean)
+      : [];
     if (!proposalId || !sectionName) throw new Error('missing fields');
   } catch {
     return NextResponse.json({ error: 'proposal_id and section_name are required' }, { status: 400 });
@@ -129,7 +166,39 @@ export async function POST(request: Request) {
     if (libraryContent) {
       content = libraryContent;
     } else {
-      content = await generateSection(SECTION_PROMPTS[sectionName]?.(croProfile, parsedRFP) ?? '');
+      let basePrompt = SECTION_PROMPTS[sectionName]?.(croProfile, parsedRFP) ?? '';
+
+      if (includeGapAnswers) {
+        // Fetch SME-answered questions for this proposal's most recent form
+        try {
+          const { data: forms } = await supabase
+            .from('sme_forms')
+            .select('id')
+            .eq('proposal_id', proposalId)
+            .order('open_until', { ascending: false });
+
+          if (forms && forms.length > 0) {
+            const allQuestions: { question_text: string; answer: string; answered_by_name: string | null }[] = [];
+            for (const form of forms) {
+              const { data: qs } = await supabase
+                .from('sme_form_questions')
+                .select('question_text, answer, answered_by_name')
+                .eq('form_id', form.id)
+                .not('answer', 'is', null);
+              if (qs) allQuestions.push(...qs.filter(q => q.answer));
+            }
+            const questions = allQuestions.length > 0 ? allQuestions : null;
+
+            const answered = (questions ?? []).filter(q => q.answer);
+            basePrompt += buildGapInjection(answered, pendingGapQuestions);
+          } else {
+            // No form yet — still inject [DATA NEEDED] for pending gaps if any
+            basePrompt += buildGapInjection([], pendingGapQuestions);
+          }
+        } catch { /* table may not exist yet — generate without gap injection */ }
+      }
+
+      content = await generateSection(basePrompt);
     }
   }
 
@@ -165,6 +234,46 @@ export async function POST(request: Request) {
       is_ai_generated: !isPricing,
       last_edited_at:  now,
     });
+  }
+
+  // Persist gap_citations on the proposal (fire-and-forget, idempotent)
+  if (includeGapAnswers && sectionName === 'executive_summary') {
+    ;(async () => {
+      try {
+        const { data: forms } = await supabase
+          .from('sme_forms')
+          .select('id')
+          .eq('proposal_id', proposalId)
+          .order('open_until', { ascending: false });
+        if (!forms || forms.length === 0) return;
+
+        const allAnswers: { gap_id: string; question_text: string; answer: string; answered_by_name: string | null; answered_at: string | null }[] = [];
+        for (const form of forms) {
+          const { data: qs } = await supabase
+            .from('sme_form_questions')
+            .select('gap_id, question_text, answer, answered_by_name, answered_at')
+            .eq('form_id', form.id)
+            .not('answer', 'is', null);
+          if (qs) allAnswers.push(...qs.filter(q => q.answer));
+        }
+        const questions = allAnswers;
+
+        if (!questions || questions.length === 0) return;
+
+        const citations = questions.filter(q => q.answer).map(q => ({
+          gap_id: q.gap_id,
+          answered_by: q.answered_by_name ?? 'SME',
+          answered_at: q.answered_at,
+          value_used: q.answer,
+          inserted_in_section: 'multiple',
+        }));
+
+        await supabase
+          .from('proposals')
+          .update({ gap_citations: citations })
+          .eq('id', proposalId);
+      } catch { /* non-fatal */ }
+    })();
   }
 
   return NextResponse.json({

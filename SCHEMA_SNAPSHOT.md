@@ -165,10 +165,56 @@ share_first_viewed_at timestamptz
 share_last_viewed_at  timestamptz
 engagement_id         uuid     nullable  FK → cro_engagements.id (set null on delete)
                                set when the quote is emailed; links proposal to its reply thread
+gap_citations         jsonb    default '[]'  array of citation objects from SME-confirmed gap data
 created_at            timestamptz default now()
 updated_at            timestamptz default now()
 ```
 RLS: all operations restricted to own cro_id.
+
+### knowledge_repo_docs
+Extracted plain text from CRO-uploaded documents. Used by gap detection to reduce false positives.
+No binary storage — text only.
+```
+id            uuid        not null  PK  default gen_random_uuid()
+cro_user_id   uuid        not null  FK → auth.users (cascade delete)
+filename      text        not null
+file_type     text        not null  check: 'pdf' | 'docx' | 'txt'
+raw_text      text        not null
+created_at    timestamptz not null  default now()
+```
+RLS: all operations restricted to own cro_user_id.
+Index: (cro_user_id, created_at DESC).
+Limits: 25 docs per CRO, 10 MB per file (enforced in upload route).
+
+### sme_forms
+One SME micro-form per proposal. Auth-less for 48h, code-protected after, hard-expires at 7 days.
+```
+id              uuid        not null  PK  default gen_random_uuid()
+proposal_id     uuid        not null  FK → proposals (cascade delete)
+token           uuid        not null  UNIQUE  default gen_random_uuid()  used in /sme/[token] URL
+access_code     text        not null  6-char alphanumeric code
+open_until      timestamptz not null  48h from creation — no code required before this
+hard_expires_at timestamptz not null  7 days from creation — fully dead after this
+created_by      uuid        not null  FK → auth.users (cascade delete)
+status          text        not null  default 'pending'  check: 'pending' | 'partially_answered' | 'complete'
+```
+RLS: CRO users manage own forms; public read by token.
+
+### sme_form_questions
+One row per gap question per SME form.
+```
+id               uuid        not null  PK  default gen_random_uuid()
+form_id          uuid        not null  FK → sme_forms (cascade delete)
+gap_id           text        not null  matches gap_id from gap detection JSON
+question_text    text        not null
+question_type    text        not null  check: 'numeric' | 'text' | 'yes_no' | 'selection'
+unit_hint        text        nullable
+answer           text        nullable  written by SME on submit
+answered_by_name text        nullable  SME's name typed at form load
+answered_at      timestamptz nullable
+```
+RLS: CRO users manage own questions (via form ownership); public read + public submit answers.
+Index: (form_id).
 
 ### referral_rewards
 Rewards granted to CROs for successful referrals.

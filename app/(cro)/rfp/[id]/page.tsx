@@ -14,7 +14,7 @@ export default async function RFPBidPage({ params }: { params: { id: string } })
 
   const { data: proposal } = await supabase
     .from('proposals')
-    .select('id, cro_id, rfp_id, status, quote_data, share_token, share_enabled, share_views, engagement_id')
+    .select('id, cro_id, rfp_id, status, quote_data, share_token, share_enabled, share_views, engagement_id, gap_citations')
     .eq('id', proposalId)
     .single();
 
@@ -107,6 +107,7 @@ export default async function RFPBidPage({ params }: { params: { id: string } })
         plan={plan}
         rawText={rfp?.raw_text ?? null}
         engagementId={(proposal as Record<string, unknown>).engagement_id as string | null ?? null}
+        gapCitations={((proposal as Record<string, unknown>).gap_citations as unknown[]) ?? []}
       />
     </AppShell>
   );

@@ -73,3 +73,18 @@ export type SectionName =
   | 'proposed_timeline'
   | 'pricing'
   | 'assumptions_exclusions';
+
+export type GapQuestionType = 'numeric' | 'text' | 'yes_no' | 'selection';
+export type GapStatus = 'pending' | 'answered';
+
+export interface Gap {
+  gap_id: string;
+  rfp_requirement: string;
+  what_we_have: string;
+  what_is_missing: string;
+  question_for_sme: string;
+  question_type: GapQuestionType;
+  unit_hint?: string | null;
+  suggested_recipient_role: string;
+  status: GapStatus;
+}

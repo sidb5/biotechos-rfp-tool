@@ -1,23 +1,107 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import type { ProposalSection, SectionName } from '@cro/types';
+import React, { useState, useRef } from 'react';
+import type { ProposalSection, SectionName, Gap } from '@cro/types';
 import VersionHistoryPanel from '@cro/components/VersionHistoryPanel';
 import Tooltip from '@shared/components/Tooltip';
 import PricingGrid, { type InvestmentRow } from '@cro/components/PricingGrid';
+import GapPanel from '@cro/components/GapPanel';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+// ─── Citation highlighting helpers ───────────────────────────────────────────
+
+interface GapCitationLocal {
+  gap_id: string;
+  answered_by: string;
+  answered_at: string | null;
+  value_used: string;
+  inserted_in_section: string;
+}
+
+function highlightTextNode(text: string, citations: GapCitationLocal[]): React.ReactNode {
+  if (!citations.length || !text.trim()) return text;
+
+  let segments: React.ReactNode[] = [text];
+
+  for (const cit of citations) {
+    const val = cit.value_used;
+    if (!val || val.length < 2) continue;
+
+    const next: React.ReactNode[] = [];
+    for (const seg of segments) {
+      if (typeof seg !== 'string') { next.push(seg); continue; }
+
+      const lower = seg.toLowerCase();
+      const valLower = val.toLowerCase();
+      let cursor = 0;
+      let found = false;
+
+      while (cursor < seg.length) {
+        const idx = lower.indexOf(valLower, cursor);
+        if (idx === -1) break;
+        found = true;
+        if (idx > cursor) next.push(seg.slice(cursor, idx));
+        const date = cit.answered_at
+          ? new Date(cit.answered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          : null;
+        const tip = `Confirmed by ${cit.answered_by}${date ? ` · ${date}` : ''}`;
+        next.push(
+          <span
+            key={`${cit.gap_id}-${idx}`}
+            title={tip}
+            className="bg-amber-100 border-b-2 border-amber-500 text-amber-900 font-medium cursor-help rounded-sm px-0.5"
+          >
+            {seg.slice(idx, idx + val.length)}
+          </span>
+        );
+        cursor = idx + val.length;
+      }
+      if (!found || cursor < seg.length) next.push(seg.slice(cursor));
+    }
+    segments = next;
+  }
+
+  return <>{segments}</>;
+}
+
+function processChildren(children: React.ReactNode, citations: GapCitationLocal[]): React.ReactNode {
+  return React.Children.map(children, child => {
+    if (typeof child === 'string') return highlightTextNode(child, citations);
+    if (React.isValidElement(child) && child.props && (child.props as { children?: React.ReactNode }).children) {
+      return React.cloneElement(
+        child as React.ReactElement<{ children?: React.ReactNode }>,
+        {},
+        processChildren((child.props as { children?: React.ReactNode }).children, citations)
+      );
+    }
+    return child;
+  });
+}
 
 // ─── Click-to-edit section: rendered markdown → textarea on click ─────────────
 
-function SectionEditor({ content, onChange }: { content: string; onChange: (v: string) => void }) {
+function SectionEditor({
+  content, onChange, citations = [],
+}: {
+  content: string;
+  onChange: (v: string) => void;
+  citations?: GapCitationLocal[];
+}) {
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function startEdit() {
     setEditing(true);
-    // Focus after render
     setTimeout(() => textareaRef.current?.focus(), 0);
   }
+
+  const mdComponents = citations.length > 0 ? {
+    p:      ({ children }: { children?: React.ReactNode }) => <p>{processChildren(children, citations)}</p>,
+    li:     ({ children }: { children?: React.ReactNode }) => <li>{processChildren(children, citations)}</li>,
+    strong: ({ children }: { children?: React.ReactNode }) => <strong>{processChildren(children, citations)}</strong>,
+    em:     ({ children }: { children?: React.ReactNode }) => <em>{processChildren(children, citations)}</em>,
+  } : undefined;
 
   if (editing) {
     return (
@@ -44,7 +128,7 @@ function SectionEditor({ content, onChange }: { content: string; onChange: (v: s
         prose-strong:text-gray-900
         prose-ul:text-gray-800 prose-ol:text-gray-800
         prose-li:my-0.5">
-        <ReactMarkdown>{content || '*Empty — click to write*'}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{content || '*Empty — click to write*'}</ReactMarkdown>
       </div>
       <span className="absolute top-2 right-2 text-[10px] text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
         Click to edit
@@ -84,12 +168,18 @@ interface Props {
   onInvestmentChange?: (rows: InvestmentRow[]) => void;
   hasSavedRates?: boolean;
   hideUnitPrices?: boolean;
+  /** SME-confirmed data citations for this proposal */
+  gapCitations?: unknown[];
+  /** Called when user clicks "✓ Verified data" badge — switches to SME Answers tab */
+  onViewAnswers?: () => void;
 }
 
 export default function ProposalEditor({
   proposalId, initialSections,
   investmentRows, onInvestmentChange, hasSavedRates = false, hideUnitPrices = false,
+  gapCitations, onViewAnswers,
 }: Props) {
+  const citations = (gapCitations ?? []) as GapCitationLocal[];
   const [sections, setSections] = useState<ProposalSection[]>(initialSections);
   const [savingSection, setSavingSection] = useState<string | null>(null);
   const [regeneratingSection, setRegeneratingSection] = useState<string | null>(null);
@@ -228,13 +318,19 @@ export default function ProposalEditor({
   // Stays true for the entire generation run so the progress view never flips
   // to sections mid-way, even as sections state fills in.
   const [generatingAll, setGeneratingAll] = useState(false);
+  // Gap state: null = gap check pending, array = check complete (may be empty)
+  const [resolvedGaps, setResolvedGaps] = useState<Gap[] | null>(null);
 
-  async function handleGenerateAll() {
+  async function handleGenerateAll(gaps?: Gap[]) {
     setGeneratingAll(true);
     setGeneratingStep(GENERATE_STEPS[0].name);
     setCompletedSteps([]);
     setGenerateError('');
     const generated: ProposalSection[] = [];
+
+    // Answered gap data for injection into section prompts (Task 3)
+    const answeredGaps = (gaps ?? []).filter(g => g.status === 'answered');
+    const pendingGaps = (gaps ?? []).filter(g => g.status === 'pending');
 
     for (const step of GENERATE_STEPS) {
       setGeneratingStep(step.name);
@@ -242,7 +338,12 @@ export default function ProposalEditor({
         const res = await fetch('/api/proposal/generate-section', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ proposal_id: proposalId, section_name: step.name }),
+          body: JSON.stringify({
+            proposal_id: proposalId,
+            section_name: step.name,
+            answered_gaps: answeredGaps.length > 0 ? answeredGaps : undefined,
+            pending_gaps: pendingGaps.length > 0 ? pendingGaps : undefined,
+          }),
         });
         const data = await res.json();
         if (!res.ok) { setGenerateError(data.error ?? 'Generation failed'); break; }
@@ -282,9 +383,22 @@ export default function ProposalEditor({
   // and on the initial empty state before generation starts.
   if (generatingAll || orderedSections.length === 0) {
     return (
-      <div className="py-12 max-w-md mx-auto">
-        {/* Pre-generation prompt */}
-        {!generatingAll && completedSteps.length === 0 && (
+      <div className="py-8 max-w-md mx-auto">
+        {/* Gap analysis panel — shown before generation starts */}
+        {!generatingAll && completedSteps.length === 0 && resolvedGaps === null && (
+          <div className="mb-6">
+            <GapPanel
+              proposalId={proposalId}
+              onReadyToGenerate={gaps => {
+                setResolvedGaps(gaps);
+                handleGenerateAll(gaps);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Pre-generation fallback (gap panel dismissed or zero-gap path) */}
+        {!generatingAll && completedSteps.length === 0 && resolvedGaps !== null && (
           <div className="text-center mb-8">
             <p className="text-sm text-gray-600 font-medium mb-1">No sections generated yet</p>
             <p className="text-xs text-gray-400 mb-6">
@@ -292,7 +406,7 @@ export default function ProposalEditor({
             </p>
             {generateError && <p className="text-xs text-red-600 mb-4">⚠ {generateError}</p>}
             <button
-              onClick={handleGenerateAll}
+              onClick={() => handleGenerateAll(resolvedGaps ?? [])}
               className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-xl transition-colors"
             >
               ✦ Generate full proposal →
@@ -340,7 +454,7 @@ export default function ProposalEditor({
             {generateError && (
               <div className="mt-4 text-center">
                 <p className="text-xs text-red-600 mb-3">⚠ {generateError}</p>
-                <button onClick={handleGenerateAll} className="text-sm text-green-600 underline">Retry →</button>
+                <button onClick={() => handleGenerateAll(resolvedGaps ?? [])} className="text-sm text-green-600 underline">Retry →</button>
               </div>
             )}
           </div>
@@ -387,9 +501,12 @@ export default function ProposalEditor({
         const isRegenerating = regeneratingSection === name;
         const isSaving = savingSection === name;
         const error = sectionErrors[name];
+        const sectionCitations = citations.filter(c =>
+          c.inserted_in_section === name || c.inserted_in_section === 'multiple'
+        );
 
         return (
-          <div key={name} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div key={name} className="bg-white rounded-xl border border-gray-200">
             {/* Section header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
@@ -400,6 +517,14 @@ export default function ProposalEditor({
                   <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">
                     AI
                   </span>
+                )}
+                {sectionCitations.length > 0 && (
+                  <button
+                    onClick={onViewAnswers}
+                    className="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full font-medium hover:bg-amber-100 transition-colors"
+                  >
+                    ✓ Verified data
+                  </button>
                 )}
                 {isSaving && (
                   <span className="text-xs text-gray-400">Saving…</span>
@@ -486,6 +611,7 @@ export default function ProposalEditor({
               ) : (
                 <SectionEditor
                   content={section.content ?? ''}
+                  citations={sectionCitations}
                   onChange={val => {
                     updateContent(name, val);
                     scheduleAutoSave(name, val);

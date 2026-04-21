@@ -80,6 +80,7 @@ interface QuoteBuilderProps {
   initialContractValue?: number | null;
   initialLossReason?: string | null;
   initialOutcomeNotes?: string | null;
+  gapCitations?: unknown[];
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -733,6 +734,98 @@ const PREVIEW_SECTION_LABELS: Record<string, string> = {
   assumptions_exclusions: 'Assumptions & Exclusions',
 };
 
+// ─── SME Answers Tab ─────────────────────────────────────────────────────────
+
+interface SMEQuestion {
+  id: string;
+  question_text: string;
+  answer: string | null;
+  answered_by_name: string | null;
+  answered_at: string | null;
+}
+
+function SMEAnswersTab({ proposalId }: { proposalId: string }) {
+  const [questions, setQuestions] = useState<SMEQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/sme-forms/status?proposal_id=${proposalId}`)
+      .then(r => r.json())
+      .then(data => {
+        const forms: { sme_form_questions: SMEQuestion[] }[] = data.forms ?? [];
+        // Aggregate questions from all forms, deduplicate by id
+        const seen = new Set<string>();
+        const allQs: SMEQuestion[] = [];
+        for (const form of forms) {
+          for (const q of (form.sme_form_questions ?? [])) {
+            if (!seen.has(q.id)) { seen.add(q.id); allQs.push(q); }
+          }
+        }
+        setQuestions(allQs);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [proposalId]);
+
+  if (loading) {
+    return <p className="text-sm text-gray-400 py-6 text-center">Loading answers…</p>;
+  }
+
+  const answered = questions.filter(q => q.answer);
+  const pending  = questions.filter(q => !q.answer);
+
+  if (questions.length === 0) {
+    return <p className="text-sm text-gray-400 py-6 text-center">No SME form has been sent for this proposal.</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-6 py-2">
+      {answered.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            ✓ Confirmed answers ({answered.length})
+          </p>
+          <div className="flex flex-col gap-3">
+            {answered.map(q => (
+              <div key={q.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-xs text-gray-500 mb-1.5 leading-snug">{q.question_text}</p>
+                <p className="text-sm font-semibold text-amber-900">{q.answer}</p>
+                {(q.answered_by_name || q.answered_at) && (
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    {q.answered_by_name && <span>Confirmed by {q.answered_by_name}</span>}
+                    {q.answered_at && (
+                      <span>
+                        {q.answered_by_name ? ' · ' : ''}
+                        {new Date(q.answered_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            Awaiting response ({pending.length})
+          </p>
+          <div className="flex flex-col gap-2">
+            {pending.map(q => (
+              <div key={q.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs text-gray-500 leading-snug">{q.question_text}</p>
+                <p className="text-xs text-gray-300 mt-1.5 italic">No answer yet</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProposalPreview({
   sections, investment, nextSteps, biotechName, croCompany, hideUnitPrices,
 }: {
@@ -868,6 +961,7 @@ export default function QuoteBuilder({
   initialContractValue,
   initialLossReason,
   initialOutcomeNotes,
+  gapCitations,
 }: QuoteBuilderProps) {
   const pdfAllowed  = canAccess('pdf_export',  plan) as boolean;
   const wordAllowed = canAccess('word_export',  plan) as boolean;
@@ -890,7 +984,7 @@ export default function QuoteBuilder({
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rawTextOpen, setRawTextOpen] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview' | 'answers'>('edit');
   const [shareEnabled, setShareEnabled] = useState(initialShareEnabled);
   const [shareViews, setShareViews] = useState(initialShareViews);
   const [shareToast, setShareToast] = useState('');
@@ -1274,14 +1368,14 @@ export default function QuoteBuilder({
                 />
               </>
             ) : (
-              /* Full proposal — edit/preview tabs */
+              /* Full proposal — edit/preview/answers tabs */
               <div className="flex flex-col gap-0">
                 {/* Tab bar */}
                 <div className="flex items-center gap-1 border-b border-gray-100 mb-4">
                   <button
-                    onClick={() => setPreviewMode(false)}
+                    onClick={() => setActiveTab('edit')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                      !previewMode
+                      activeTab === 'edit'
                         ? 'border-green-600 text-green-700'
                         : 'border-transparent text-gray-400 hover:text-gray-600'
                     }`}
@@ -1289,9 +1383,9 @@ export default function QuoteBuilder({
                     Edit
                   </button>
                   <button
-                    onClick={() => setPreviewMode(true)}
+                    onClick={() => setActiveTab('preview')}
                     className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                      previewMode
+                      activeTab === 'preview'
                         ? 'border-green-600 text-green-700'
                         : 'border-transparent text-gray-400 hover:text-gray-600'
                     }`}
@@ -1302,9 +1396,22 @@ export default function QuoteBuilder({
                     </svg>
                     Preview as recipient
                   </button>
+                  {(gapCitations ?? []).length > 0 && (
+                    <button
+                      onClick={() => setActiveTab('answers')}
+                      className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                        activeTab === 'answers'
+                          ? 'border-amber-500 text-amber-700'
+                          : 'border-transparent text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+                      SME Answers
+                    </button>
+                  )}
                 </div>
 
-                {previewMode ? (
+                {activeTab === 'preview' ? (
                   <ProposalPreview
                     sections={existingSections}
                     investment={data.investment}
@@ -1313,6 +1420,8 @@ export default function QuoteBuilder({
                     croCompany={croContact.company_name}
                     hideUnitPrices={data._hideUnitPrices ?? false}
                   />
+                ) : activeTab === 'answers' ? (
+                  <SMEAnswersTab proposalId={proposalId} />
                 ) : (
                   <ProposalEditor
                     proposalId={proposalId}
@@ -1321,9 +1430,25 @@ export default function QuoteBuilder({
                     onInvestmentChange={rows => setData(d => ({ ...d, investment: rows }))}
                     hasSavedRates={data._hasSavedRates ?? false}
                     hideUnitPrices={data._hideUnitPrices ?? false}
+                    gapCitations={gapCitations}
+                    onViewAnswers={() => setActiveTab('answers')}
                   />
                 )}
               </div>
+            )}
+
+            {/* Timeline + Next Steps — shown in full_proposal edit tab, only once sections exist */}
+            {data.mode === 'full_proposal' && activeTab === 'edit' && existingSections.length > 0 && (
+              <>
+                <TimelineBlock
+                  rows={data.timeline}
+                  onChange={rows => setData(d => ({ ...d, timeline: rows }))}
+                />
+                <NextStepsBlock
+                  lines={data.next_steps}
+                  onChange={lines => setData(d => ({ ...d, next_steps: lines }))}
+                />
+              </>
             )}
 
           </div>
@@ -1555,6 +1680,23 @@ export default function QuoteBuilder({
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Checklist</p>
               <Completeness data={data} />
             </div>
+
+            {/* SME answers summary — only shown when SME-confirmed data was used */}
+            {(gapCitations ?? []).length > 0 && (
+              <div className="border-t border-gray-100 pt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">SME answers used</p>
+                <p className="text-xs text-gray-500 mb-2">
+                  {(gapCitations ?? []).length} confirmed value{(gapCitations ?? []).length !== 1 ? 's' : ''} woven into the proposal.
+                  <br />
+                  <button
+                    onClick={() => setActiveTab('answers')}
+                    className="text-amber-600 hover:text-amber-700 underline mt-0.5"
+                  >
+                    View all answers →
+                  </button>
+                </p>
+              </div>
+            )}
           </aside>
         </div>
       </div>

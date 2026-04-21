@@ -4,7 +4,7 @@
 
 BiotechOS is moving toward an **approver-only** experience: AI handles the operational back-and-forth of engagements between biotech sponsors and CROs; the user shows up at approval moments and little else. Every outbound email that matters is an AI-drafted proposal awaiting human approval; routine back-and-forth is automated; the user's time is reserved for decision points.
 
-Current build (see TASKS_EMAIL_INFRA.md) delivers the foundational MVP of this vision:
+Current build delivers the foundational MVP of this vision:
 - AI drafts every reply; user approves in the app.
 - In-app and email notifications bring the user to approval moments.
 - User runs full engagements from inside the app with no copy-paste after engagement creation.
@@ -21,9 +21,7 @@ Future direction, captured here so it is not forgotten (but NOT in current scope
 
 Claude Code should check these and respect the one most relevant to the current request. Multiple may be active in parallel.
 
-- **TASKS_EMAIL_INFRA.md** — email send + reply capture + AI drafting + notifications; spans both personas. Active.
-- **TASKS_QUICKQUOTE.md** — CRO Proposal Engine redesign. Active.
-- **TASKS_RFP_BUILDER.md** — Biotech-side engagement pipeline build. Active.
+- **TASKS_GAP_ENGINE.md** — Gap Analysis + SME Micro-Form Engine for Product 1. Inserts between RFP parsing and proposal generation. **This is the only active task file. All others are complete and have been moved away — do not look for or reference them.**
 
 Files prefixed `DONE_` are archived; do not read them unless explicitly asked.
 
@@ -47,6 +45,7 @@ Helps small preclinical CROs respond to incoming RFPs and quote requests faster.
 - Lives in: `app/(cro)/`
 - Status: live in production, with an active redesign under TASKS_QUICKQUOTE.md
 - Active users: CRO BD directors and proposal writers
+- Gap Engine (TASKS_GAP_ENGINE.md): inserts between RFP parse and proposal generation. Detects missing technical specs by cross-referencing the RFP against the CRO profile and Knowledge Repository, generates targeted SME Micro-Forms via auth-less UUID links (open 48h, code-protected after, hard-expires at 7 days — reusing quote token pattern), auto-fills confirmed answers into the proposal with source attribution, and surfaces an audit trail on both the internal editor and the public quote page.
 
 ### Product 2 — Biotech CRO Engagement Pipeline (building)
 Helps biotech/pharma companies find, evaluate, and engage CROs for preclinical studies. Handles the full workflow from internal brief to final RFP delivery — with IP protection built in at every step.
@@ -132,7 +131,13 @@ Enforced at both UI and server. A development-only allowlist environment variabl
 ## Database
 Read `SCHEMA_SNAPSHOT.md` for all table definitions. Do NOT read individual migration files to understand schema. New tables go in `supabase/migrations/` prefixed with `cro_`, `biotech_`, or `shared_`. Also keep `SCHEMA_SNAPSHOT.md` updated with new changes being made to supabase so that its always current with supabase state.
 
-When adding new tables or extending existing ones for the email infra work (TASKS_EMAIL_INFRA.md), prefer extending existing structures over creating parallel ones. Use existing patterns in the codebase.
+When adding new tables or extending existing ones, prefer extending existing structures over creating parallel ones. Use existing patterns in the codebase.
+
+New tables added by TASKS_GAP_ENGINE.md (prefix: `cro_`):
+- `sme_forms` — one record per SME form generated, holds token, access_code, open_until (48h no-code window), hard_expires_at (7 days), status
+- `sme_form_questions` — one row per gap question per form; stores answer, answered_by_name, answered_at on submit
+- `knowledge_repo_docs` — stores extracted plain text from CRO-uploaded docs (PDF/DOCX/TXT); no binary storage
+- `proposals` table extended with `gap_citations` (jsonb) — array of citation objects linking answered gaps to proposal text
 
 ---
 
@@ -165,6 +170,7 @@ The Next.js app root is `E:\PROJECTS\BiotechOS\app\`. Route groups use parenthes
 - New biotech feature: page in `app/(biotech)/biotech/`, component in `app/(biotech)/components/`
 - Used by both: component in `app/(shared)/components/`, lib in `app/(shared)/lib/`
 - New DB table: migration file in `supabase/migrations/` prefixed with `cro_`, `biotech_`, or `shared_`
+- Gap Engine pages: `/sme/[token]` (public, no auth) in `app/(shared)/` — accessible to both CRO users and external SMEs without login; `/dashboard/knowledge-repo` in `app/(cro)/`
 
 ---
 
@@ -181,7 +187,6 @@ The Next.js app root is `E:\PROJECTS\BiotechOS\app\`. Route groups use parenthes
 ## What NOT to build yet (future phases)
 
 - One-click approve directly from notification emails (MVP has users click through to the app and approve there)
-- AI learning loop that improves drafts from user approvals/edits
 - Graduated autonomy for auto-sending low-stakes replies
 - Cross-engagement AI intelligence
 - Gmail OAuth inbox-reading scopes (ever)
