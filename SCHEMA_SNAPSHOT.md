@@ -414,6 +414,9 @@ imaging_confidence_score    integer
 cmc_confidence_score        integer
 biomarkers_confidence_score integer
 organoids_confidence_score  integer
+-- Modality booleans (added 2026-04-20):
+small_molecule              boolean  default true   CRO handles small molecule compounds
+biologic                    boolean  default false  CRO handles biologics (antibodies, proteins, gene therapy)
 created_at                  timestamptz default now()
 ```
 RLS: DISABLED — read-only public reference table.

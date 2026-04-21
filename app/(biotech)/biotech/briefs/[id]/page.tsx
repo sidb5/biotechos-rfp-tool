@@ -70,6 +70,8 @@ interface CRO {
   address: string | null;
   phone: string | null;
   entity_type: string | null;
+  small_molecule: boolean | null;
+  biologic: boolean | null;
   // service flags
   in_vitro: boolean | null;
   in_vivo: boolean | null;
@@ -185,6 +187,7 @@ export default function BriefPage() {
   const [serviceFilters, setServiceFilters]   = useState<Set<ServiceKey>>(new Set());
   const [showServiceFilters, setShowServiceFilters] = useState(false);
   const [nameFilter, setNameFilter]           = useState('');
+  const [modalityFilter, setModalityFilter]   = useState<'any' | 'small_molecule' | 'biologic'>('any');
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -218,7 +221,7 @@ export default function BriefPage() {
                    size_category, glp_certified, contact_email, contact_form_url, bd_key_contact,
                    services_summary, services_full, employee_count, notable_clients, revenue_estimate,
                    phase_expertise, therapeutic_areas, reputation_positive, website, address, phone,
-                   entity_type, ${serviceColumns}`)
+                   entity_type, small_molecule, biologic, ${serviceColumns}`)
           .order('name')
           .range(0, 1999),
         supabase
@@ -265,6 +268,10 @@ export default function BriefPage() {
           const hasAll = Array.from(serviceFilters).every(svc => croRec[svc]);
           if (!hasAll) return false;
         }
+        if (modalityFilter !== 'any') {
+          const croRec = cro as unknown as Record<string, unknown>;
+          if (!croRec[modalityFilter]) return false;
+        }
         return true;
       })
       .map(cro => {
@@ -277,7 +284,7 @@ export default function BriefPage() {
       filteredWithEmail: scored.filter(c => c.contact_email),
       filteredNoEmail:   scored.filter(c => !c.contact_email),
     };
-  }, [allCROs, biosecureOnly, glpOnly, regions, sizeFilter, stateFilter, serviceFilters, nameFilter, brief]);
+  }, [allCROs, biosecureOnly, glpOnly, regions, sizeFilter, stateFilter, serviceFilters, modalityFilter, nameFilter, brief]);
 
   // Unique US states from filtered results (for state dropdown)
   const availableStates = useMemo(() => {
@@ -539,6 +546,27 @@ export default function BriefPage() {
                       }`}
                     >
                       {s === 'any' ? 'Any' : s}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Modality:</span>
+                  {([
+                    { value: 'any', label: 'Any' },
+                    { value: 'small_molecule', label: 'Small Molecule' },
+                    { value: 'biologic', label: 'Biologic' },
+                  ] as { value: 'any' | 'small_molecule' | 'biologic'; label: string }[]).map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setModalityFilter(opt.value)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        modalityFilter === opt.value
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                      }`}
+                    >
+                      {opt.label}
                     </button>
                   ))}
                 </div>
