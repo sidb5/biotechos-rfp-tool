@@ -8,47 +8,84 @@ import { checkCorporateEmail } from '@shared/lib/email-domain';
 import OAuthButtons from '@shared/components/OAuthButtons';
 import { useTenant } from '@shared/components/TenantProvider';
 
-type Step = 'persona' | 'login';
-type UserType = 'cro' | 'biotech';
+// ── Per-side marketing copy ────────────────────────────────────────────────────
 
-const DASHBOARD: Record<UserType, string> = {
-  cro: '/dashboard',
-  biotech: '/biotech/dashboard',
-};
+const SELL_SIDE_COPY = {
+  tagline: 'Win more studies. Spend less time writing.',
+  sub:     'AI drafts every proposal section — you just review and send.',
+  benefits: [
+    'Reply to any client brief in hours, not days',
+    'Detect data gaps and collect answers from scientists automatically',
+    'Proposals that cite confirmed lab values, not generic boilerplate',
+    'Track every opportunity from enquiry to award in one place',
+  ],
+} as const;
+
+const BUY_SIDE_COPY = {
+  tagline: 'Find the right partner. Protect your IP.',
+  sub:     "Brief, engage, and award \u2014 without revealing your compound until you\u2019re ready.",
+  benefits: [
+    'IP-safe enquiries keep compound identity in your vault',
+    'BIOSECURE-compliant partner matching',
+    'AI-drafted follow-ups arrive awaiting your approval',
+    'One dashboard from first contact to signed agreement',
+  ],
+} as const;
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function CheckIcon() {
+  return (
+    <svg className="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7.5" stroke="currentColor" strokeOpacity={0.3} />
+      <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 function LoginPageInner() {
-  const router = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const tenant = useTenant();
+  const tenant       = useTenant();
 
-  const [step, setStep] = useState<Step>('persona');
-  const [userType, setUserType] = useState<UserType | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'login' | 'forgot'>('login');
+  // Derive user type from tenant — no persona picker needed
+  const userType = tenant.appSide === 'sell' ? 'cro' : 'biotech';
+  const isCro    = userType === 'cro';
+  const copy     = isCro ? SELL_SIDE_COPY : BUY_SIDE_COPY;
+
+  // Theme colours driven by side
+  const accent = isCro ? 'green' : 'blue';
+  const accentClasses = {
+    ring:   isCro ? 'focus:ring-green-500' : 'focus:ring-blue-500',
+    btn:    isCro ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700',
+    text:   isCro ? 'text-green-600'  : 'text-blue-600',
+    border: isCro ? 'border-green-600': 'border-blue-600',
+    dot:    isCro ? 'bg-green-400'    : 'bg-blue-400',
+    panel:  isCro
+      ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-emerald-950'
+      : 'bg-gradient-to-br from-gray-900 via-gray-800 to-blue-950',
+  };
+
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [error, setError]           = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [mode, setMode]             = useState<'login' | 'forgot'>('login');
   const [forgotSent, setForgotSent] = useState(false);
 
-  // Pre-open forgot password panel if ?reset=1
   useEffect(() => {
-    if (searchParams.get('reset') === '1') {
-      setMode('forgot');
-      setStep('login'); // skip persona picker for password reset
-    }
+    if (searchParams.get('reset') === '1') setMode('forgot');
   }, [searchParams]);
 
-  function selectPersona(type: UserType) {
-    setUserType(type);
-    setStep('login');
-  }
+  // ── Sign in ────────────────────────────────────────────────────────────────
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Corporate-domain gate (Task 13)
     const domainCheck = checkCorporateEmail(email);
     if (!domainCheck.ok) {
       setError(domainCheck.message ?? 'Please use your work email.');
@@ -56,282 +93,227 @@ function LoginPageInner() {
       return;
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setError(error.message);
+    if (authError) {
+      setError(authError.message);
       setLoading(false);
-    } else {
-      // Enforce persona: the selected card must match the account's registered user_type.
-      // Existing accounts with no user_type are treated as CRO (backward-compat).
-      const storedType = data.user?.user_metadata?.user_type ?? 'cro';
-
-      if (userType && storedType !== userType) {
-        // Wrong persona selected — sign them back out and explain.
-        await supabase.auth.signOut();
-        const accountLabel  = storedType === 'cro' ? tenant.orgLabel : 'Biotech / Pharma';
-        const correctOption = storedType === 'cro' ? `I'm a ${tenant.orgLabel}` : "I'm a Biotech / Pharma";
-        setError(
-          `This email is registered as a ${accountLabel} account. ` +
-          `Please go back and select "${correctOption}".`
-        );
-        setLoading(false);
-        return;
-      }
-
-      const destination = storedType === 'biotech' ? DASHBOARD.biotech : DASHBOARD.cro;
-      router.refresh();
-      router.push(destination);
+      return;
     }
+
+    const storedType = data.user?.user_metadata?.user_type ?? 'cro';
+    if (storedType !== userType) {
+      await supabase.auth.signOut();
+      const correctDomain = storedType === 'cro'
+        ? tenant.platformName
+        : 'the Biotech portal';
+      setError(`This account is registered on ${correctDomain}. Please sign in there instead.`);
+      setLoading(false);
+      return;
+    }
+
+    router.refresh();
+    router.push(userType === 'biotech' ? '/biotech/dashboard' : '/dashboard');
   }
+
+  // ── Forgot password ────────────────────────────────────────────────────────
 
   async function handleForgot(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
+      await fetch('/api/auth/forgot-password', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body:    JSON.stringify({ email }),
       });
-      if (!res.ok) throw new Error('Failed');
-    } catch {
-      // Intentionally show success even on error (don't leak email existence)
-    }
-
+    } catch { /* intentionally silent — don't leak email existence */ }
     setForgotSent(true);
     setLoading(false);
   }
 
-  // ── Forgot password ─────────────────────────────────────────────────────
-
-  if (mode === 'forgot') {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-1">
-              {tenant.platformName}
-            </p>
-            <h1 className="text-2xl font-bold text-gray-900">Reset your password</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Enter your email and we&apos;ll send you a reset link.
-            </p>
-          </div>
-
-          {forgotSent ? (
-            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 text-sm text-green-800">
-              <p className="font-semibold mb-1">Check your inbox</p>
-              <p>If an account exists for <strong>{email}</strong>, we&apos;ve sent a password reset link. It expires in 1 hour.</p>
-            </div>
-          ) : (
-            <form onSubmit={handleForgot} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="you@yourcompany.com"
-                />
-              </div>
-              {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Sending…' : 'Send reset link'}
-              </button>
-            </form>
-          )}
-
-          <button
-            type="button"
-            onClick={() => { setMode('login'); setForgotSent(false); setError(''); setStep('persona'); }}
-            className="mt-5 text-sm text-gray-600 font-medium hover:underline flex items-center gap-1"
-          >
-            ← Back to sign in
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  // ── Step 1: Persona picker ──────────────────────────────────────────────
-
-  if (step === 'persona') {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="w-full max-w-lg">
-          <div className="text-center mb-10">
-            <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-2">
-              {tenant.platformName}
-            </p>
-            <h1 className="text-3xl font-bold text-gray-900">Welcome back</h1>
-            <p className="text-gray-500 mt-2 text-sm">
-              Sign in to the right product for your role.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* CRO card */}
-            <button
-              type="button"
-              onClick={() => selectPersona('cro')}
-              className="group text-left border-2 border-gray-200 hover:border-green-500 bg-white rounded-2xl p-6 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <div className="w-10 h-10 bg-green-100 group-hover:bg-green-200 rounded-xl flex items-center justify-center mb-4 transition-colors">
-                <svg className="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-              </div>
-              <h2 className="text-base font-semibold text-gray-900 mb-1">
-                {tenant.appSide === 'sell' ? `I'm a ${tenant.orgLabel}` : `I'm a Service Provider`}
-              </h2>
-              <p className="text-sm text-gray-500 leading-snug">
-                Respond to incoming RFPs and quote requests faster.
-              </p>
-              <p className="mt-3 text-xs font-medium text-green-600 group-hover:text-green-700">
-                {tenant.platformName} →
-              </p>
-            </button>
-
-            {/* Biotech card */}
-            <button
-              type="button"
-              onClick={() => selectPersona('biotech')}
-              className="group text-left border-2 border-gray-200 hover:border-blue-500 bg-white rounded-2xl p-6 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <div className="w-10 h-10 bg-blue-100 group-hover:bg-blue-200 rounded-xl flex items-center justify-center mb-4 transition-colors">
-                <svg className="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-              </div>
-              <h2 className="text-base font-semibold text-gray-900 mb-1">
-                {tenant.appSide === 'buy' ? `I'm a ${tenant.orgLabel}` : `I'm a Biotech / Pharma`}
-              </h2>
-              <p className="text-sm text-gray-500 leading-snug">
-                Find, brief, and engage {tenant.counterpartyLabel}s for preclinical studies.
-              </p>
-              <p className="mt-3 text-xs font-medium text-blue-600 group-hover:text-blue-700">
-                {tenant.counterpartyLabel} Engagement Pipeline →
-              </p>
-            </button>
-          </div>
-
-          <p className="mt-8 text-sm text-center text-gray-500">
-            No account?{' '}
-            <Link href="/signup" className="text-gray-700 font-medium hover:underline">
-              Sign up
-            </Link>
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  // ── Step 2: Sign-in form ────────────────────────────────────────────────
-
-  const isCro = userType === 'cro';
+  // ── Layout ─────────────────────────────────────────────────────────────────
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-sm">
+    <main className="min-h-screen flex flex-col lg:flex-row">
 
-        {/* Back to persona picker */}
-        <button
-          type="button"
-          onClick={() => { setStep('persona'); setError(''); }}
-          className="mb-6 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 transition-colors"
-        >
-          ← Change role
-        </button>
+      {/* ── Left panel: marketing ── */}
+      <div className={`hidden lg:flex lg:w-[52%] xl:w-[55%] flex-col justify-between p-12 xl:p-16 ${accentClasses.panel}`}>
 
-        <div className="mb-8">
-          <div className={`inline-flex items-center gap-1.5 text-xs font-semibold tracking-widest uppercase mb-2 ${isCro ? 'text-green-600' : 'text-blue-600'}`}>
-            <span className={`w-2 h-2 rounded-full ${isCro ? 'bg-green-500' : 'bg-blue-500'}`} />
-            {isCro
-            ? `${tenant.orgLabel} — ${tenant.platformName}`
-            : `Biotech / Pharma — ${tenant.platformName}`}
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">Sign in</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {isCro
-              ? 'Reply to any client request in hours, not days.'
-              : 'Find and brief CROs without exposing your IP.'}
-          </p>
+        {/* Top: brand */}
+        <div>
+          <span className={`inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase ${accentClasses.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${accentClasses.dot}`} />
+            {tenant.platformName}
+          </span>
         </div>
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
+        {/* Middle: headline + benefits */}
+        <div className="space-y-10">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
-                isCro ? 'focus:ring-green-500' : 'focus:ring-blue-500'
-              }`}
-              placeholder={isCro ? 'you@yourcro.com' : 'you@yourbiotech.com'}
-            />
+            <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight">
+              {copy.tagline}
+            </h1>
+            <p className="mt-4 text-lg text-gray-400 leading-relaxed max-w-md">
+              {copy.sub}
+            </p>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-gray-700">Password</label>
+          <ul className="space-y-4">
+            {copy.benefits.map(b => (
+              <li key={b} className={`flex items-start gap-3 ${accentClasses.text}`}>
+                <CheckIcon />
+                <span className="text-gray-200 text-sm leading-relaxed">{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Bottom: social proof */}
+        <p className="text-xs text-gray-500">
+          Built for preclinical {tenant.orgLabelPlural}.
+        </p>
+      </div>
+
+      {/* ── Right panel: auth form ── */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 bg-white">
+        <div className="w-full max-w-sm">
+
+          {/* Mobile-only brand */}
+          <div className="lg:hidden mb-8 text-center">
+            <span className={`text-xs font-bold tracking-widest uppercase ${accentClasses.text}`}>
+              {tenant.platformName}
+            </span>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">{copy.tagline}</h2>
+          </div>
+
+          {mode === 'forgot' ? (
+            /* ── Forgot password ── */
+            <>
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-900">Reset your password</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Enter your email and we&apos;ll send you a reset link.
+                </p>
+              </div>
+
+              {forgotSent ? (
+                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 text-sm text-green-800">
+                  <p className="font-semibold mb-1">Check your inbox</p>
+                  <p>
+                    If an account exists for <strong>{email}</strong>, we&apos;ve sent a reset
+                    link. It expires in 1 hour.
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleForgot} className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className={`w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${accentClasses.ring}`}
+                      placeholder="you@yourcompany.com"
+                    />
+                  </div>
+                  {error && (
+                    <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className={`w-full py-2.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 ${accentClasses.btn}`}
+                  >
+                    {loading ? 'Sending…' : 'Send reset link'}
+                  </button>
+                </form>
+              )}
+
               <button
                 type="button"
-                onClick={() => { setMode('forgot'); setError(''); }}
-                className={`text-xs font-medium hover:underline ${isCro ? 'text-green-600' : 'text-blue-600'}`}
+                onClick={() => { setMode('login'); setForgotSent(false); setError(''); }}
+                className="mt-5 text-sm text-gray-600 font-medium hover:underline flex items-center gap-1"
               >
-                Forgot password?
+                ← Back to sign in
               </button>
-            </div>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
-                isCro ? 'focus:ring-green-500' : 'focus:ring-blue-500'
-              }`}
-              placeholder="••••••••"
-            />
-          </div>
+            </>
+          ) : (
+            /* ── Sign in form ── */
+            <>
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {isCro
+                    ? `Welcome back to ${tenant.platformName}.`
+                    : `Welcome back to ${tenant.platformName}.`}
+                </p>
+              </div>
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+              <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Work email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className={`w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${accentClasses.ring}`}
+                    placeholder={isCro ? 'you@yourcro.com' : 'you@yourbiotech.com'}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => { setMode('forgot'); setError(''); }}
+                      className={`text-xs font-medium hover:underline ${accentClasses.text}`}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className={`w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:border-transparent ${accentClasses.ring}`}
+                    placeholder="••••••••"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`w-full py-2.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${accentClasses.btn}`}
+                >
+                  {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+              </form>
+
+              <OAuthButtons userType={userType} mode="signin" />
+
+              <p className="mt-6 text-sm text-center text-gray-500">
+                No account?{' '}
+                <Link href="/signup" className={`font-medium hover:underline ${accentClasses.text}`}>
+                  Sign up
+                </Link>
+              </p>
+            </>
           )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full py-2.5 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              isCro
-                ? 'bg-green-600 hover:bg-green-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-
-        <OAuthButtons userType={userType ?? 'cro'} mode="signin" />
-
-        <p className="mt-6 text-sm text-center text-gray-500">
-          No account?{' '}
-          <Link href="/signup" className={`font-medium hover:underline ${isCro ? 'text-green-600' : 'text-blue-600'}`}>
-            Sign up
-          </Link>
-        </p>
+        </div>
       </div>
     </main>
   );
@@ -340,8 +322,8 @@ function LoginPageInner() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+      <main className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
       </main>
     }>
       <LoginPageInner />
