@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
 import BiotechNav from '@biotech/components/BiotechNav';
+import { getTenantConfig } from '@shared/lib/get-tenant';
 
-export const metadata: Metadata = {
-  title: 'BiotechOS — Sponsor Portal',
-  description: 'Source CROs, manage RFPs, and track your research programs.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const config = getTenantConfig();
+  return {
+    title: `${config.platformName} — ${config.counterpartyLabel} Portal`,
+    description: `Source ${config.counterpartyLabel}s, manage RFPs, and track your research programs.`,
+  };
+}
 
 export default function BiotechLayout({ children }: { children: React.ReactNode }) {
   return (

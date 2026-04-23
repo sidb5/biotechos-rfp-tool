@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@shared/lib/supabase';
 import ThemeToggle from '@shared/components/ThemeToggle';
+import { useTenant } from '@shared/components/TenantProvider';
 
 // ─── Nav structure ─────────────────────────────────────────────────────────
 
@@ -39,6 +40,10 @@ const SECONDARY_NAV = [
   {
     href: '/library', label: 'Library',
     icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" /></svg>,
+  },
+  {
+    href: '/dashboard/knowledge-repo', label: 'Knowledge Repo',
+    icon: <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
   },
 ];
 
@@ -89,6 +94,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [userInitial, setUserInitial] = useState('U');
   const [userEmail, setUserEmail]     = useState('');
+  const tenant = useTenant();
 
   // Unread notification count — refreshes every 10 s and on tab focus
   const [unreadCount, setUnreadCount] = useState(0);
@@ -163,7 +169,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
 
       {/* ── Logo + create buttons ── */}
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-100">
-        <p className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-3">Proposal Engine</p>
+        <p className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-3">{tenant.platformName}</p>
         <div className="flex gap-1.5">
           <button
             onClick={() => router.push('/rfp/new?mode=quick_quote')}

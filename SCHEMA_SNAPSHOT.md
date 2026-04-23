@@ -83,6 +83,7 @@ verification_token_expires_at timestamptz
 cros_directory_id             uuid     nullable  FK → cros_directory.id
 sender_display_name           text     shown in email From field
 sender_email                  text     Reply-To on outbound quotes/proposals
+org_type                      text     NOT NULL DEFAULT 'CRO'  CHECK ('CRO'|'CDMO')  set from tenant at signup
 created_at                    timestamptz default now()
 updated_at                    timestamptz default now()
 ```
