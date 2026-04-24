@@ -14,6 +14,14 @@ interface Props {
   proposalsUsed: number
   proposalLimit: number | null
   showSuccess: boolean
+  /** Override checkout API path (default: /api/billing/create-checkout) */
+  checkoutPath?: string
+  /** Override portal API path (default: /api/billing/create-portal) */
+  portalPath?: string
+  /** Label shown for the usage bar (default: 'Proposals this month') */
+  usageLabel?: string
+  /** Link for "View all plans" (default: /pricing) */
+  pricingHref?: string
 }
 
 function formatDate(iso: string): string {
@@ -32,6 +40,10 @@ export default function BillingClient({
   proposalsUsed,
   proposalLimit,
   showSuccess,
+  checkoutPath = '/api/billing/create-checkout',
+  portalPath   = '/api/billing/create-portal',
+  usageLabel   = 'Proposals this month',
+  pricingHref  = '/pricing',
 }: Props) {
   const [loading, setLoading] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -39,7 +51,7 @@ export default function BillingClient({
   async function handleUpgrade(targetPlan: 'starter' | 'pro') {
     setLoading('upgrade-' + targetPlan)
     try {
-      const res = await fetch('/api/billing/create-checkout', {
+      const res = await fetch(checkoutPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: targetPlan }),
@@ -56,7 +68,7 @@ export default function BillingClient({
   async function handlePortal() {
     setLoading('portal')
     try {
-      const res = await fetch('/api/billing/create-portal', { method: 'POST' })
+      const res = await fetch(portalPath, { method: 'POST' })
       const json = await res.json()
       if (json.url) window.location.href = json.url
       else alert(json.error ?? 'Something went wrong')
@@ -135,7 +147,7 @@ export default function BillingClient({
         {proposalLimit !== null && (
           <div className="border-t border-gray-100 pt-4">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-              <span>Proposals this month</span>
+              <span>{usageLabel}</span>
               <span className="font-semibold text-gray-700">{proposalsUsed} / {proposalLimit}</span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -154,7 +166,7 @@ export default function BillingClient({
         {proposalLimit === null && (
           <div className="border-t border-gray-100 pt-4">
             <p className="text-xs text-gray-500">
-              Proposals this month: <span className="font-semibold text-gray-700">{proposalsUsed}</span>{' '}
+              {usageLabel}: <span className="font-semibold text-gray-700">{proposalsUsed}</span>{' '}
               <span className="text-gray-400">(unlimited)</span>
             </p>
           </div>
@@ -215,7 +227,7 @@ export default function BillingClient({
 
       {/* View all plans */}
       <a
-        href="/pricing"
+        href={pricingHref}
         className="text-center text-sm text-green-600 hover:text-green-700 font-medium underline underline-offset-2"
       >
         View all plans →

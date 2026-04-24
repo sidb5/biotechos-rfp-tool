@@ -14,38 +14,60 @@ function getServiceClient() {
   )
 }
 
+function resolvePlan(priceId: string | undefined): 'free' | 'starter' | 'pro' {
+  if (priceId === process.env.STRIPE_STARTER_PRICE_ID) return 'starter'
+  if (priceId === process.env.STRIPE_PRO_PRICE_ID) return 'pro'
+  return 'free'
+}
+
 async function upsertSubscription(
   supabase: ReturnType<typeof getServiceClient>,
   stripeSubscription: Stripe.Subscription
 ) {
-  const croProfileId = stripeSubscription.metadata?.cro_profile_id
-  if (!croProfileId) return
-
   const item = stripeSubscription.items.data[0]
-  const priceId = item?.price.id
-
-  let plan: 'free' | 'starter' | 'pro' = 'free'
-  if (priceId === process.env.STRIPE_STARTER_PRICE_ID) plan = 'starter'
-  else if (priceId === process.env.STRIPE_PRO_PRICE_ID) plan = 'pro'
-
+  const plan = resolvePlan(item?.price.id)
   const status = stripeSubscription.status as string
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sub = stripeSubscription as any
+  const periodStart = sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null
+  const periodEnd   = sub.current_period_end   ? new Date(sub.current_period_end   * 1000).toISOString() : null
 
-  await supabase
-    .from('subscriptions')
-    .upsert({
-      cro_profile_id:          croProfileId,
-      stripe_customer_id:      stripeSubscription.customer as string,
-      stripe_subscription_id:  stripeSubscription.id,
-      plan,
-      status,
-      current_period_start:    sub.current_period_start ? new Date(sub.current_period_start * 1000).toISOString() : null,
-      current_period_end:      sub.current_period_end   ? new Date(sub.current_period_end   * 1000).toISOString() : null,
-      cancel_at_period_end:    stripeSubscription.cancel_at_period_end,
-      updated_at:              new Date().toISOString(),
-    }, { onConflict: 'cro_profile_id' })
+  // ── CRO sell-side ──
+  const croProfileId = stripeSubscription.metadata?.cro_profile_id
+  if (croProfileId) {
+    await supabase
+      .from('subscriptions')
+      .upsert({
+        cro_profile_id:          croProfileId,
+        stripe_customer_id:      stripeSubscription.customer as string,
+        stripe_subscription_id:  stripeSubscription.id,
+        plan,
+        status,
+        current_period_start:    periodStart,
+        current_period_end:      periodEnd,
+        cancel_at_period_end:    stripeSubscription.cancel_at_period_end,
+        updated_at:              new Date().toISOString(),
+      }, { onConflict: 'cro_profile_id' })
+    return
+  }
+
+  // ── Biotech buy-side ──
+  const biotechUserId = stripeSubscription.metadata?.biotech_user_id
+  if (biotechUserId) {
+    await supabase
+      .from('biotech_subscriptions')
+      .upsert({
+        user_id:                 biotechUserId,
+        stripe_customer_id:      stripeSubscription.customer as string,
+        stripe_subscription_id:  stripeSubscription.id,
+        plan,
+        status,
+        current_period_start:    periodStart,
+        current_period_end:      periodEnd,
+        cancel_at_period_end:    stripeSubscription.cancel_at_period_end,
+        updated_at:              new Date().toISOString(),
+      }, { onConflict: 'user_id' })
+  }
 }
 
 export async function POST(request: Request) {
@@ -78,12 +100,14 @@ export async function POST(request: Request) {
 
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription
-        const croProfileId = sub.metadata?.cro_profile_id
+        const croProfileId   = sub.metadata?.cro_profile_id
+        const biotechUserId  = sub.metadata?.biotech_user_id
+        const cancelled = { plan: 'free', status: 'cancelled', updated_at: new Date().toISOString() }
         if (croProfileId) {
-          await supabase
-            .from('subscriptions')
-            .update({ plan: 'free', status: 'cancelled', updated_at: new Date().toISOString() })
-            .eq('cro_profile_id', croProfileId)
+          await supabase.from('subscriptions').update(cancelled).eq('cro_profile_id', croProfileId)
+        }
+        if (biotechUserId) {
+          await supabase.from('biotech_subscriptions').update(cancelled).eq('user_id', biotechUserId)
         }
         break
       }
@@ -93,10 +117,9 @@ export async function POST(request: Request) {
         const invoice = event.data.object as any
         const subId = (invoice.subscription ?? invoice.parent?.subscription_details?.subscription) as string | null
         if (subId) {
-          await supabase
-            .from('subscriptions')
-            .update({ status: 'past_due', updated_at: new Date().toISOString() })
-            .eq('stripe_subscription_id', subId)
+          const pastDue = { status: 'past_due', updated_at: new Date().toISOString() }
+          await supabase.from('subscriptions').update(pastDue).eq('stripe_subscription_id', subId)
+          await supabase.from('biotech_subscriptions').update(pastDue).eq('stripe_subscription_id', subId)
         }
         break
       }
@@ -106,10 +129,9 @@ export async function POST(request: Request) {
         const invoice = event.data.object as any
         const subId = (invoice.subscription ?? invoice.parent?.subscription_details?.subscription) as string | null
         if (subId) {
-          await supabase
-            .from('subscriptions')
-            .update({ status: 'active', updated_at: new Date().toISOString() })
-            .eq('stripe_subscription_id', subId)
+          const active = { status: 'active', updated_at: new Date().toISOString() }
+          await supabase.from('subscriptions').update(active).eq('stripe_subscription_id', subId)
+          await supabase.from('biotech_subscriptions').update(active).eq('stripe_subscription_id', subId)
         }
         break
       }

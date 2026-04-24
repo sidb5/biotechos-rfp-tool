@@ -7,6 +7,8 @@ import { useTenant } from '@shared/components/TenantProvider'
 interface Props {
   currentPlan: Plan
   croCount?: number
+  /** Override checkout API path (default: /api/billing/create-checkout) */
+  checkoutPath?: string
 }
 
 const FEATURES_ROWS = [
@@ -28,7 +30,7 @@ const FEATURES_ROWS = [
   { label: 'Proposal watermark',      free: 'Yes',        starter: 'No',          pro: 'No' },
 ]
 
-export default function PricingClient({ currentPlan, croCount }: Props) {
+export default function PricingClient({ currentPlan, croCount, checkoutPath = '/api/billing/create-checkout' }: Props) {
   const [annual, setAnnual] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const tenant = useTenant()
@@ -36,7 +38,7 @@ export default function PricingClient({ currentPlan, croCount }: Props) {
   async function handleUpgrade(plan: 'starter' | 'pro') {
     setLoading(plan)
     try {
-      const res = await fetch('/api/billing/create-checkout', {
+      const res = await fetch(checkoutPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan, annual }),
@@ -69,7 +71,7 @@ export default function PricingClient({ currentPlan, croCount }: Props) {
       name: 'Starter',
       price: annual ? '$79' : '$99',
       period: annual ? '/mo billed annually' : '/month',
-      description: 'For solo CRO founders responding to 15+ requests a month.',
+      description: `For solo ${tenant.orgLabel} founders responding to 15+ requests a month.`,
       cta: currentPlan === 'starter' ? 'Current plan' : currentPlan === 'pro' ? 'Downgrade' : 'Upgrade to Starter',
       ctaDisabled: currentPlan === 'starter',
       highlight: true,

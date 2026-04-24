@@ -530,6 +530,37 @@ updated_at          timestamptz default now()
 ```
 RLS: all operations restricted to own user_id.
 
+### biotech_subscriptions
+Tracks Stripe subscription state for buy-side users (SourceMyCRO / SourceMyCDMO).
+Keyed on user_id — no separate profile table on the biotech side.
+```
+user_id                uuid        not null  PK  FK → auth.users (cascade delete)
+stripe_customer_id     text
+stripe_subscription_id text
+plan                   text        not null  default 'free'  check: 'free'|'starter'|'pro'
+status                 text        not null  default 'active'
+current_period_start   timestamptz
+current_period_end     timestamptz
+cancel_at_period_end   boolean     not null  default false
+updated_at             timestamptz not null  default now()
+```
+RLS: user manages own row; service role has full access.
+Index: stripe_subscription_id (for webhook lookups).
+Webhook metadata key: `biotech_user_id` (vs CRO's `cro_profile_id`).
+
+### biotech_usage_tracking
+Monthly usage counters for buy-side users.
+```
+id             uuid        not null  PK  default gen_random_uuid()
+user_id        uuid        not null  FK → auth.users (cascade delete)
+month          text        not null  YYYY-MM
+briefs_created integer     not null  default 0
+rfps_sent      integer     not null  default 0
+updated_at     timestamptz not null  default now()
+UNIQUE: (user_id, month)
+```
+RLS: user manages own rows; service role has full access.
+
 ---
 
 ## Admin Portal Tables
