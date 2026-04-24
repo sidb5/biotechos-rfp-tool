@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: config.platformName,
     description: config.appSide === 'sell'
       ? 'Reply to any client request in hours, not days. Turn emails, PDFs, and RFPs into professional proposals.'
-      : 'Source CROs, manage RFPs, and track your research programs.',
+      : `Source ${config.counterpartyLabel}s, manage RFPs, and track your research programs.`,
   };
 }
 

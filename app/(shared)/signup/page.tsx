@@ -315,7 +315,7 @@ function SignupPageInner() {
                 I'm a Biotech / Pharma
               </h2>
               <p className="text-sm text-gray-500 leading-snug">
-                I need to find, brief, and engage CROs for preclinical studies — with IP protection built in.
+                I need to find, brief, and engage {tenant.orgLabelPlural} for preclinical studies — with IP protection built in.
               </p>
               <p className="mt-3 text-xs font-medium text-blue-600 group-hover:text-blue-700">
                 CRO Engagement Pipeline →
@@ -372,7 +372,7 @@ function SignupPageInner() {
           <h1 className="text-2xl font-bold text-gray-900">
             {isCro
               ? 'Reply to any client request in hours, not days.'
-              : 'Find and brief CROs without exposing your IP.'}
+              : `Find and brief ${tenant.orgLabelPlural} without exposing your IP.`}
           </h1>
           <p className="text-sm text-gray-500 mt-2">
             {isCro
@@ -384,7 +384,7 @@ function SignupPageInner() {
               <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z" />
               </svg>
-              Join {croCount}+ CROs already using {tenant.platformName}
+              Join {croCount}+ {tenant.orgLabelPlural} already using {tenant.platformName}
             </p>
           )}
         </div>

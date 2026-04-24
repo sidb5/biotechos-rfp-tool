@@ -9,7 +9,7 @@ interface Props {
 
 export default async function ProposalLandingPage({ params }: Props) {
   const { token } = await params
-  const { platformName } = getTenantConfig()
+  const { platformName, orgLabelPlural } = getTenantConfig()
   const brand = getBrand(platformName)
 
   const service = createClient(
@@ -63,7 +63,7 @@ export default async function ProposalLandingPage({ params }: Props) {
         </h1>
 
         <p className="text-gray-600 mb-2">
-          {platformName} helps preclinical CROs respond to client requests
+          {platformName} helps preclinical {orgLabelPlural} respond to client requests
           in hours — not days. No more pulling scientists into sales.
         </p>
 

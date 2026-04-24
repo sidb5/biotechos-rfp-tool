@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import VerifyBusiness from './VerifyBusiness'
+import { useTenant } from './TenantProvider'
 
 interface Referral {
   id: string
@@ -32,6 +33,7 @@ export default function ReferralsClient({
   freeMonthsEarned,
   appUrl,
 }: Props) {
+  const tenant = useTenant()
   const [copied, setCopied] = useState<'code' | 'link' | null>(null)
   const [isVerified, setIsVerified] = useState(initialVerified)
   const [showVerify, setShowVerify] = useState(false)
@@ -117,7 +119,7 @@ export default function ReferralsClient({
       <section className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-sm font-semibold text-gray-900 mb-1 uppercase tracking-widest">Your referral code</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Share this link with other CROs. When they sign up and verify their business
+          Share this link with other {tenant.orgLabelPlural}. When they sign up and verify their business
           (corporate email or EIN), you both get <strong>1 month free</strong> on any paid plan.
           You don&apos;t need to verify yourself to share — only your referee does.
         </p>

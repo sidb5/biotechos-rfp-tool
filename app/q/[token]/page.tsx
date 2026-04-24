@@ -316,7 +316,7 @@ export default function PublicQuotePage() {
           >
             <BrandLockup brand={buyBrand} variant="nav" surface="dark" />
             <span className="text-white/50">|</span>
-            Find &amp; engage CROs faster →
+            Find &amp; engage {tenant.orgLabel}s faster →
           </a>
         </div>
       </div>
@@ -365,7 +365,7 @@ export default function PublicQuotePage() {
           </div>
           <p className="text-sm font-semibold text-gray-900 mb-1">Managing multiple CRO relationships?</p>
           <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
-            {tenant.platformName === 'CDMORFP' ? 'SourceMyCDMO' : 'SourceMyCRO'} helps biotech companies find, evaluate, and engage CROs — from internal brief to final RFP, with IP protection at every step.
+            {tenant.platformName === 'CDMORFP' ? 'SourceMyCDMO' : 'SourceMyCRO'} helps biotech companies find, evaluate, and engage {tenant.orgLabel}s — from internal brief to final RFP, with IP protection at every step.
           </p>
           <a
             href="/signup?ref=quote"
