@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const { data: proposal } = await supabase
     .from('proposals')
-    .select('id, share_token, share_enabled, share_views, share_first_viewed_at, created_at, quote_data, cro_id, rfp_id')
+    .select('id, share_token, share_enabled, share_views, share_first_viewed_at, created_at, quote_data, cro_id, rfp_id, gap_citations')
     .eq('share_token', token)
     .single();
 
@@ -67,5 +67,6 @@ export async function POST(req: NextRequest) {
     cro_company: profile?.company_name ?? 'CRO',
     biotech_name: rfp?.biotech_name ?? 'your project',
     created_at: proposal.created_at,
+    gap_citations: (proposal.gap_citations as unknown[]) ?? [],
   });
 }

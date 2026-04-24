@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import BrandLockup, { getBrand } from '@shared/components/BrandLockup'
+import { getTenantConfig } from '@shared/lib/get-tenant'
 
 interface Props {
   params: Promise<{ token: string }>
@@ -7,6 +9,8 @@ interface Props {
 
 export default async function ProposalLandingPage({ params }: Props) {
   const { token } = await params
+  const { platformName } = getTenantConfig()
+  const brand = getBrand(platformName)
 
   const service = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,29 +51,25 @@ export default async function ProposalLandingPage({ params }: Props) {
     <main className="min-h-screen bg-white flex items-center justify-center p-6">
       <div className="max-w-lg w-full text-center">
 
-        {/* Logo mark */}
-        <div className="w-14 h-14 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-          <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
+        {/* Brand lockup */}
+        <div className="flex justify-center mb-6">
+          <BrandLockup brand={brand} variant="auth" />
         </div>
-
-        <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-2">Proposal Engine</p>
 
         <h1 className="text-2xl font-bold text-gray-900 mb-3">
           {croName
             ? `This proposal was created by ${croName}`
-            : 'This proposal was created with Proposal Engine'}
+            : 'This proposal was created with CRORFP'}
         </h1>
 
         <p className="text-gray-600 mb-2">
-          Proposal Engine helps preclinical CROs respond to client requests
+          {platformName} helps preclinical CROs respond to client requests
           in hours — not days. No more pulling scientists into sales.
         </p>
 
         {croName && (
           <p className="text-sm text-gray-500 mb-8">
-            {croName} used Proposal Engine to build this proposal for you.
+            {croName} used {platformName} to build this proposal for you.
           </p>
         )}
 

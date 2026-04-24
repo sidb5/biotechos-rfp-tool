@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useTenant } from '@shared/components/TenantProvider';
+import BrandLockup, { getBrand, getBuySideBrand } from '@shared/components/BrandLockup';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,12 +25,20 @@ interface ProposalSection {
   content: string;
 }
 
+interface GapCitation {
+  gap_id: string;
+  answered_by: string;
+  answered_at: string | null;
+  value_used: string;
+}
+
 interface QuotePayload {
   quote_data: QuoteData;
   proposal_sections: ProposalSection[];
   cro_company: string;
   biotech_name: string;
   created_at: string;
+  gap_citations?: GapCitation[];
 }
 
 function formatDate(iso: string): string {
@@ -180,11 +190,15 @@ function FullProposalView({ sections }: { sections: ProposalSection[] }) {
 export default function PublicQuotePage() {
   const params = useParams();
   const token = params.token as string;
+  const tenant    = useTenant();
+  const sellBrand = getBrand(tenant.platformName);
+  const buyBrand  = getBuySideBrand(sellBrand);
 
   const [state, setState] = useState<'password' | 'loading' | 'quote' | 'error'>('password');
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [quote, setQuote] = useState<QuotePayload | null>(null);
+  const [verifiedModalOpen, setVerifiedModalOpen] = useState(false);
 
   // Check if password is in URL hash (from email link)
   useEffect(() => {
@@ -253,7 +267,9 @@ export default function PublicQuotePage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-6">
-            <p className="text-xs font-bold tracking-widest uppercase text-green-600 mb-1">BiotechOS</p>
+            <div className="flex justify-center mb-2">
+              <BrandLockup brand={sellBrand} variant="auth" />
+            </div>
             <h1 className="text-xl font-bold text-gray-900">View quote</h1>
             <p className="text-sm text-gray-500 mt-1">Enter the access code from your email</p>
           </div>
@@ -298,7 +314,7 @@ export default function PublicQuotePage() {
             href="/signup?ref=quote"
             className="shrink-0 flex items-center gap-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 text-xs font-medium text-white/90 transition-colors"
           >
-            <span className="text-[10px] font-bold tracking-widest uppercase text-green-400">BiotechOS</span>
+            <BrandLockup brand={buyBrand} variant="nav" surface="dark" />
             <span className="text-white/50">|</span>
             Find &amp; engage CROs faster →
           </a>
@@ -344,9 +360,12 @@ export default function PublicQuotePage() {
       {/* Bottom CTA banner */}
       <div className="border-t border-gray-100 bg-gray-50">
         <div className="max-w-2xl mx-auto px-6 py-8 text-center">
+          <div className="flex justify-center mb-2">
+            <BrandLockup brand={buyBrand} variant="nav" />
+          </div>
           <p className="text-sm font-semibold text-gray-900 mb-1">Managing multiple CRO relationships?</p>
           <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
-            BiotechOS helps biotech companies find, evaluate, and engage CROs — from internal brief to final RFP, with IP protection at every step.
+            {tenant.platformName === 'CDMORFP' ? 'SourceMyCDMO' : 'SourceMyCRO'} helps biotech companies find, evaluate, and engage CROs — from internal brief to final RFP, with IP protection at every step.
           </p>
           <a
             href="/signup?ref=quote"
@@ -357,12 +376,58 @@ export default function PublicQuotePage() {
         </div>
       </div>
 
+      {/* Data verified badge — only shown when SME-confirmed data exists */}
+      {(quote?.gap_citations ?? []).length > 0 && (
+        <>
+          <div className="border-t border-gray-100 px-6 py-4 text-center">
+            <button
+              onClick={() => setVerifiedModalOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 border border-green-200 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-full transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              Data verified
+            </button>
+          </div>
+
+          {verifiedModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+              <div className="w-full max-w-sm rounded-2xl bg-white border border-gray-200 shadow-xl p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 mb-1">Verified technical data</h2>
+                    <p className="text-xs text-gray-500">
+                      The following specifications were confirmed by {quote?.cro_company}&apos;s internal team prior to this proposal:
+                    </p>
+                  </div>
+                  <button onClick={() => setVerifiedModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none ml-3">×</button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {(quote?.gap_citations ?? []).map((c, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm py-2 border-b border-gray-100 last:border-0">
+                      <span className="text-gray-700 font-medium">{c.value_used}</span>
+                      <span className="text-xs text-gray-400 ml-3 text-right shrink-0">
+                        confirmed by {c.answered_by}
+                        {c.answered_at && (
+                          <> ({new Date(c.answered_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })})</>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       <footer className="border-t border-gray-100 px-6 py-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-xs text-gray-400 text-center">
             Powered by{' '}
             <a href="/signup?ref=quote" className="underline underline-offset-2 hover:text-gray-600 transition-colors">
-              BiotechOS
+              {tenant.platformName}
             </a>
           </p>
         </div>

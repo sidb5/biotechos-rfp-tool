@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@shared/lib/supabase';
 import ThemeToggle from '@shared/components/ThemeToggle';
 import { useTenant } from '@shared/components/TenantProvider';
+import BrandLockup, { getBrand } from '@shared/components/BrandLockup';
 
 // ─── Nav structure ─────────────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ function Sidebar({ onSignOut }: { onSignOut: () => void }) {
 
       {/* ── Logo + create buttons ── */}
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-100">
-        <p className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-3">{tenant.platformName}</p>
+        <BrandLockup brand={getBrand(tenant.platformName)} variant="nav" className="mb-3" />
         <div className="flex gap-1.5">
           <button
             onClick={() => router.push('/rfp/new?mode=quick_quote')}

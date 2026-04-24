@@ -46,7 +46,8 @@ export async function updateSession(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith('/auth/')
   )
     || pathname.startsWith('/q/')   // quote share links (password-protected at page level)
-    || pathname.startsWith('/p/');  // proposal share links (password-protected at page level)
+    || pathname.startsWith('/p/')   // proposal share links (password-protected at page level)
+    || pathname.startsWith('/sme/'); // SME micro-form links (auth-less by design)
 
   if (!session && !isPublic) {
     const url = request.nextUrl.clone();

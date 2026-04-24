@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import BrandLockup, { getBrand } from '@shared/components/BrandLockup'
+import { getTenantConfig } from '@shared/lib/get-tenant'
 
 interface Props {
   searchParams: Promise<{ error?: string; message?: string; type?: string }>
@@ -27,6 +29,8 @@ const ERROR_MESSAGES: Record<string, { title: string; body: string; action: stri
 
 export default async function AuthErrorPage({ searchParams }: Props) {
   const params = await searchParams
+  const { platformName } = getTenantConfig()
+  const brand = getBrand(platformName)
   // callback sends ?error=, magic-link handler sends ?message= — accept both
   const rawMessage = params.error ?? params.message ?? ''
   const type = params.type ?? 'signup'
@@ -57,9 +61,9 @@ export default async function AuthErrorPage({ searchParams }: Props) {
           </svg>
         </div>
 
-        <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-2">
-          Proposal Engine
-        </p>
+        <div className="flex justify-center mb-2">
+          <BrandLockup brand={brand} variant="auth" />
+        </div>
         <h1 className="text-xl font-bold text-gray-900 mb-3">{config.title}</h1>
         <p className="text-sm text-gray-500 mb-7 leading-relaxed">{config.body}</p>
 

@@ -7,6 +7,7 @@ import { supabase } from '@shared/lib/supabase';
 import { checkCorporateEmail } from '@shared/lib/email-domain';
 import OAuthButtons from '@shared/components/OAuthButtons';
 import { useTenant } from '@shared/components/TenantProvider';
+import BrandLockup, { getBrand } from '@shared/components/BrandLockup';
 
 // ── Per-side marketing copy ────────────────────────────────────────────────────
 
@@ -143,10 +144,7 @@ function LoginPageInner() {
 
         {/* Top: brand */}
         <div>
-          <span className={`inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase ${accentClasses.text}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${accentClasses.dot}`} />
-            {tenant.platformName}
-          </span>
+          <BrandLockup brand={getBrand(tenant.platformName)} variant="nav" surface="dark" />
         </div>
 
         {/* Middle: headline + benefits */}
@@ -181,11 +179,9 @@ function LoginPageInner() {
         <div className="w-full max-w-sm">
 
           {/* Mobile-only brand */}
-          <div className="lg:hidden mb-8 text-center">
-            <span className={`text-xs font-bold tracking-widest uppercase ${accentClasses.text}`}>
-              {tenant.platformName}
-            </span>
-            <h2 className="mt-2 text-2xl font-bold text-gray-900">{copy.tagline}</h2>
+          <div className="lg:hidden mb-8 text-center flex flex-col items-center gap-2">
+            <BrandLockup brand={getBrand(tenant.platformName)} variant="auth" />
+            <h2 className="text-2xl font-bold text-gray-900">{copy.tagline}</h2>
           </div>
 
           {mode === 'forgot' ? (

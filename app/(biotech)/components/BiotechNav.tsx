@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import ThemeToggle from '@shared/components/ThemeToggle';
 import { supabase } from '@shared/lib/supabase';
 import { useTenant } from '@shared/components/TenantProvider';
+import BrandLockup, { getBrand } from '@shared/components/BrandLockup';
 
 const NAV = [
   {
@@ -215,8 +216,8 @@ export default function BiotechNav() {
       <aside className="hidden lg:flex flex-col w-52 shrink-0 border-r border-gray-100 bg-white min-h-screen sticky top-0">
         {/* Logo */}
         <div className="px-4 py-5 border-b border-gray-100">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500">{tenant.platformName}</p>
-          <p className="text-xs text-gray-600 mt-0.5">{tenant.counterpartyLabel} Engagement Pipeline</p>
+          <BrandLockup brand={getBrand(tenant.platformName)} variant="nav" />
+          <p className="text-xs text-gray-500 mt-1.5">{tenant.counterpartyLabel} Engagement Pipeline</p>
         </div>
         <div className="flex-1 flex flex-col">
           {navLinks}
@@ -226,7 +227,7 @@ export default function BiotechNav() {
       {/* ── Mobile top bar ── */}
       <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-30">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500">{tenant.platformName}</p>
+          <BrandLockup brand={getBrand(tenant.platformName)} variant="nav" />
         </div>
         <button
           onClick={() => setMobileOpen(v => !v)}

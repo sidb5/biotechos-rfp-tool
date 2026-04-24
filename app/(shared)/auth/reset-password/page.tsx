@@ -3,9 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@shared/lib/supabase'
+import { useTenant } from '@shared/components/TenantProvider'
+import BrandLockup, { getBrand } from '@shared/components/BrandLockup'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const tenant = useTenant()
+  const brand  = getBrand(tenant.platformName)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -58,9 +62,9 @@ export default function ResetPasswordPage() {
     <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8">
-          <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-1">
-            Proposal Engine
-          </p>
+          <div className="mb-3">
+            <BrandLockup brand={brand} variant="auth" />
+          </div>
           <h1 className="text-2xl font-bold text-gray-900">Set a new password</h1>
           <p className="text-sm text-gray-500 mt-1">Choose a strong password for your account.</p>
         </div>

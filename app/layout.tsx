@@ -23,9 +23,19 @@ export default async function RootLayout({
 }) {
   const tenantConfig = getTenantConfig();
 
+  // Derive tenant-specific favicon
+  const faviconMap: Record<string, string> = {
+    CRORFP:       '/favicon-crorfp.svg',
+    CDMORFP:      '/favicon-cdmorfp.svg',
+    SourceMyCRO:  '/favicon-sourcemycro.svg',
+    SourceMyCDMO: '/favicon-sourcemycdmo.svg',
+  };
+  const faviconUrl = faviconMap[tenantConfig.platformName] ?? '/favicon-crorfp.svg';
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="icon" href={faviconUrl} type="image/svg+xml" />
         {/* Apply saved theme before first paint to avoid flash */}
         <script
           dangerouslySetInnerHTML={{

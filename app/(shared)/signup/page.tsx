@@ -7,6 +7,8 @@ import { supabase } from '@shared/lib/supabase';
 import VerifyBusiness from '@shared/components/VerifyBusiness';
 import { checkCorporateEmail } from '@shared/lib/email-domain';
 import OAuthButtons from '@shared/components/OAuthButtons';
+import { useTenant } from '@shared/components/TenantProvider';
+import BrandLockup, { getBrand } from '@shared/components/BrandLockup';
 
 type Step = 'persona' | 'signup' | 'verify';
 type UserType = 'cro' | 'biotech';
@@ -28,6 +30,8 @@ const DASHBOARD: Record<UserType, string> = {
 function SignupPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const tenant = useTenant();
+  const brand  = getBrand(tenant.platformName);
 
   const [step, setStep] = useState<Step>('persona');
   const [userType, setUserType] = useState<UserType | null>(null);
@@ -262,9 +266,9 @@ function SignupPageInner() {
       <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="w-full max-w-lg">
           <div className="text-center mb-10">
-            <p className="text-xs font-semibold tracking-widest uppercase text-gray-400 mb-2">
-              BiotechOS
-            </p>
+            <div className="flex justify-center mb-3">
+              <BrandLockup brand={brand} variant="auth" />
+            </div>
             <h1 className="text-3xl font-bold text-gray-900">Who are you?</h1>
             <p className="text-gray-500 mt-2 text-sm">
               We'll show you the right tools for your role.
@@ -291,7 +295,7 @@ function SignupPageInner() {
                 I run preclinical studies and want to respond to incoming RFPs faster.
               </p>
               <p className="mt-3 text-xs font-medium text-green-600 group-hover:text-green-700">
-                Proposal Engine →
+                {tenant.appSide === 'sell' ? tenant.platformName : 'CRORFP'} →
               </p>
             </button>
 
@@ -363,7 +367,7 @@ function SignupPageInner() {
         <div className="mb-8">
           <div className={`inline-flex items-center gap-1.5 text-xs font-semibold tracking-widest uppercase mb-2 ${isCro ? 'text-green-600' : 'text-blue-600'}`}>
             <span className={`w-2 h-2 rounded-full ${isCro ? 'bg-green-500' : 'bg-blue-500'}`} />
-            {isCro ? 'CRO — Proposal Engine' : 'Biotech / Pharma — CRO Pipeline'}
+            {isCro ? `CRO — ${tenant.platformName}` : `Biotech / Pharma — ${tenant.platformName}`}
           </div>
           <h1 className="text-2xl font-bold text-gray-900">
             {isCro
@@ -380,7 +384,7 @@ function SignupPageInner() {
               <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v1h8v-1zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-1a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v1h-3zM4.75 12.094A5.973 5.973 0 004 15v1H1v-1a3 3 0 013.75-2.906z" />
               </svg>
-              Join {croCount}+ CROs already using Proposal Engine
+              Join {croCount}+ CROs already using {tenant.platformName}
             </p>
           )}
         </div>
